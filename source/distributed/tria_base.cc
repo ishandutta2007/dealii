@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2015 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/logstream.h>
@@ -120,6 +119,7 @@ namespace parallel
   DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
   TriangulationBase<dim, spacedim>::NumberCache::NumberCache()
     : n_locally_owned_active_cells(0)
+    , n_global_active_cells(0)
     , number_of_global_coarse_cells(0)
     , n_global_levels(0)
   {}
@@ -157,7 +157,7 @@ namespace parallel
 
   template <int dim, int spacedim>
   DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
-  MPI_Comm TriangulationBase<dim, spacedim>::get_communicator() const
+  MPI_Comm TriangulationBase<dim, spacedim>::get_mpi_communicator() const
   {
     return mpi_communicator;
   }
@@ -684,9 +684,11 @@ namespace parallel
 
   template <int dim, int spacedim>
   DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
-  void DistributedTriangulationBase<dim, spacedim>::clear()
+  void TriangulationBase<dim, spacedim>::clear()
   {
     dealii::Triangulation<dim, spacedim>::clear();
+
+    number_cache = {};
   }
 
 

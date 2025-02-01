@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2020 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_mpi_consensus_algorithm_h
 #define dealii_mpi_consensus_algorithm_h
@@ -126,8 +125,6 @@ namespace Utilities
      * an MPI communicator, a list of targets, and function objects that
      * encode and decode the messages to be sent, but no functions for
      * encoding a reply, or processing a reply.
-     *
-     * @ingroup MPI
      */
     namespace ConsensusAlgorithms
     {
@@ -154,9 +151,14 @@ namespace Utilities
        *    (1) deliver only references to empty vectors (of size 0) the data
        *    to be sent can be inserted to or read from, and (2) communicate
        *    these vectors blindly.
+       *
+       * @deprecated Instead of deriving a class from this base class and
+       *   providing a corresponding object to one of the run() functions,
+       *   use the free functions in this namespace that take function
+       *   objects as arguments.
        */
       template <typename RequestType, typename AnswerType>
-      class Process
+      class DEAL_II_DEPRECATED_EARLY Process
       {
       public:
         /**
@@ -252,7 +254,13 @@ namespace Utilities
          * This version of the run() function simply unpacks the functions
          * packaged in `process` and calls the version of the run() function
          * that takes a number of `std::function` arguments.
+         *
+         * @deprecated Instead of deriving a class from the Process base class and
+         *   providing a corresponding object to this function,
+         *   use the other run() function in this class that takes function
+         *   objects as arguments.
          */
+        DEAL_II_DEPRECATED_EARLY
         std::vector<unsigned int>
         run(Process<RequestType, AnswerType> &process, const MPI_Comm comm);
 
@@ -1276,21 +1284,7 @@ namespace Utilities
         /**
          * Return whether a vector of targets (MPI ranks) has only unique
          * elements.
-         *
-         * This function is only used within assertions, which causes GCC
-         * to issue a warning in release mode that due to -Werror then causes an
-         * error. We suppress this by using the [[gnu::unused]] error (because
-         * the
-         * [[maybe_unused]] attribute is only supported from C++17 forward).
-         *
-         * Unfortunately, in contrast to what the standard says, the Microsoft
-         * compiler does not ignore the gnu::unused attribute as it should,
-         * and then produces an error of its own. So we disable the attribute
-         * for that compiler.
          */
-#  ifndef DEAL_II_MSVC
-        [[gnu::unused]]
-#  endif
         inline bool
         has_unique_elements(const std::vector<unsigned int> &targets)
         {

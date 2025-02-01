@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2004 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_petsc_solver_h
 #define dealii_petsc_solver_h
@@ -21,7 +20,7 @@
 
 #ifdef DEAL_II_WITH_PETSC
 
-#  include <deal.II/base/smartpointer.h>
+#  include <deal.II/base/observer_pointer.h>
 
 #  include <deal.II/lac/exceptions.h>
 #  include <deal.II/lac/solver_control.h>
@@ -173,7 +172,7 @@ namespace PETScWrappers
      * copy the data from this object before starting the solution process,
      * and copy the data back into it afterwards.
      */
-    SmartPointer<SolverControl, SolverBase> solver_control;
+    ObserverPointer<SolverControl, SolverBase> solver_control;
 
     /**
      * Utility to create the KSP object and attach convergence test.
@@ -934,12 +933,30 @@ namespace PETScWrappers
     solve(const MatrixBase &A, VectorBase &x, const VectorBase &b);
 
     /**
-     * The method allows to take advantage if the system matrix is symmetric
-     * by using LDL^T decomposition instead of more expensive LU. The argument
-     * indicates whether the matrix is symmetric or not.
+     * If called with `true` as argument, tell the direct solver
+     * to assume that the system matrix is symmetric.
+     * It does so by computing the LDL^T decomposition (in effect, a
+     * Cholesky decomposition) instead of more expensive LU decomposition.
+     * The argument indicates whether the matrix can be assumed to be
+     * symmetric or not.
+     *
+     * Note that most finite element matrices are "structurally symmetric",
+     * i.e., the *sparsity pattern* is symmetric, even though the matrix
+     * is not. An example of a matrix that is structurally symmetric
+     * but not symmetric is the matrix you obtain by discretizing the
+     * advection equation $\nabla \cdot (\vec\beta u) = f$ (see, for
+     * example step-12). Because the operator here is not symmetric, the
+     * matrix is not symmetric either; however, if matrix entry $A_{ij}$
+     * is nonzero, then matrix entry $A_{ji}$ is generally not zero either
+     * (and in any case, DoFTools::make_sparsity_pattern() will create a
+     * symmetric sparsity pattern). That said, the current function
+     * is not meant to indicate whether the *sparsity* pattern is symmetric,
+     * but whether the *matrix* itself is symmetric, and this typically
+     * requires that the differential operator you are considering is
+     * symmetric.
      */
     void
-    set_symmetric_mode(const bool flag);
+    set_symmetric_mode(const bool matrix_is_symmetric);
 
   protected:
     /**

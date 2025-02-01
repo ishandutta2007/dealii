@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2012 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_la_parallel_vector_h
 #define dealii_la_parallel_vector_h
@@ -19,13 +18,13 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/communication_pattern_base.h>
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/memory_space.h>
 #include <deal.II/base/memory_space_data.h>
 #include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/numbers.h>
 #include <deal.II/base/parallel.h>
 #include <deal.II/base/partitioner.h>
-#include <deal.II/base/subscriptor.h>
 
 #include <deal.II/lac/read_vector.h>
 #include <deal.II/lac/vector_operation.h>
@@ -247,7 +246,7 @@ namespace LinearAlgebra
      * @endcode
      */
     template <typename Number, typename MemorySpace = MemorySpace::Host>
-    class Vector : public ::dealii::ReadVector<Number>, public Subscriptor
+    class Vector : public ::dealii::ReadVector<Number>
     {
     public:
       using memory_space    = MemorySpace;
@@ -453,7 +452,7 @@ namespace LinearAlgebra
        * analogy to standard functions.
        */
       void
-      swap(Vector<Number, MemorySpace> &v);
+      swap(Vector<Number, MemorySpace> &v) noexcept;
 
       /**
        * Move assignment operator.
@@ -468,12 +467,29 @@ namespace LinearAlgebra
        * Assigns the vector to the parallel partitioning of the input vector
        * @p in_vector, and copies all the data.
        *
-       * If one of the input vector or the calling vector (to the left of the
-       * assignment operator) had ghost elements set before this operation,
-       * the calling vector will have ghost values set. Otherwise, it will be
-       * in write mode. If the input vector does not have any ghost elements
-       * at all, the vector will also update its ghost values in analogy to
-       * the respective setting the Trilinos and PETSc vectors.
+       * The semantics of this operator are complex. If the two vectors have
+       * the same size, and
+       * if either the left or right hand side vector of the assignment (i.e.,
+       * either the input vector on the right hand side, or the calling vector
+       * to the left of the assignment operator) currently has ghost elements,
+       * then the left hand side vector will also have ghost values and will
+       * consequently be a read-only vector (see also the
+       * @ref GlossGhostedVector "glossary entry" on the issue). Otherwise, the
+       * left hand vector will be a writable vector after this operation.
+       * These semantics facilitate having a vector with ghost elements on the
+       * left hand side of the assignment, and a vector without ghost elements
+       * on the right hand side, with the resulting left hand side vector
+       * having the correct values in both its locally owned and its ghost
+       * elements.
+       *
+       * On the other hand, if the left hand side vector does not have the
+       * correct size yet, or is perhaps an entirely uninitialized vector,
+       * then the assignment is simply a copy operation in the usual sense:
+       * In that case, if the right hand side has no ghost elements (i.e.,
+       * is a completely distributed vector), then the left hand side will
+       * have no ghost elements either. And if the right hand side has
+       * ghost elements (and is consequently read-only), then the left
+       * hand side will have these same properties after the operation.
        */
       Vector<Number, MemorySpace> &
       operator=(const Vector<Number, MemorySpace> &in_vector);
@@ -562,10 +578,10 @@ namespace LinearAlgebra
       update_ghost_values() const;
 
       /**
-       * Initiates communication for the @p compress() function with non-
-       * blocking communication. This function does not wait for the transfer
-       * to finish, in order to allow for other computations during the time
-       * it takes until all data arrives.
+       * Initiates communication for the @p compress() function with
+       * non-blocking communication. This function does not wait for the
+       * transfer to finish, in order to allow for other computations during the
+       * time it takes until all data arrives.
        *
        * Before the data is actually exchanged, the function must be followed
        * by a call to @p compress_finish().
@@ -1118,7 +1134,7 @@ namespace LinearAlgebra
       virtual void
       extract_subvector_to(
         const ArrayView<const types::global_dof_index> &indices,
-        ArrayView<Number> &elements) const override;
+        const ArrayView<Number> &elements) const override;
 
       /**
        * Instead of getting individual elements of a vector via operator(),
@@ -1154,7 +1170,7 @@ namespace LinearAlgebra
                            OutputIterator        values_begin) const;
       /**
        * Return whether the vector contains only elements with value zero.
-       * This is a collective operation. This function is expensive, because
+       * This is a @ref GlossCollectiveOperation "collective operation". This function is expensive, because
        * potentially all elements have to be checked.
        */
       bool
@@ -1347,6 +1363,16 @@ namespace LinearAlgebra
       add_and_dot_local(const Number                       a,
                         const Vector<Number, MemorySpace> &V,
                         const Vector<Number, MemorySpace> &W);
+
+      /**
+       * Assert that there are no spurious non-zero entries in the ghost
+       * region of the vector caused by some forgotten compress() or
+       * zero_out_ghost_values() calls, which is an invariant of the vector
+       * space operations such as the addition of vectors, scaling a vector,
+       * and similar.
+       */
+      void
+      assert_no_residual_content_in_ghost_region() const;
 
       /**
        * Shared pointer to store the parallel partitioning information. This
@@ -1687,8 +1713,8 @@ namespace LinearAlgebra
       while (indices_begin != indices_end)
         {
           *values_begin = operator()(*indices_begin);
-          indices_begin++;
-          values_begin++;
+          ++indices_begin;
+          ++values_begin;
         }
     }
 
@@ -1774,7 +1800,7 @@ namespace LinearAlgebra
 template <typename Number, typename MemorySpace>
 inline void
 swap(LinearAlgebra::distributed::Vector<Number, MemorySpace> &u,
-     LinearAlgebra::distributed::Vector<Number, MemorySpace> &v)
+     LinearAlgebra::distributed::Vector<Number, MemorySpace> &v) noexcept
 {
   u.swap(v);
 }

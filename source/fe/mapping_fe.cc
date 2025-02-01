@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2015 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/array_view.h>
@@ -27,6 +26,7 @@
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_fe.h>
 
+#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_iterator.h>
@@ -75,12 +75,11 @@ MappingFE<dim, spacedim>::InternalData::memory_consumption() const
 }
 
 
+
 template <int dim, int spacedim>
 void
-MappingFE<dim, spacedim>::InternalData::initialize(
-  const UpdateFlags      update_flags,
-  const Quadrature<dim> &q,
-  const unsigned int     n_original_q_points)
+MappingFE<dim, spacedim>::InternalData::reinit(const UpdateFlags update_flags,
+                                               const Quadrature<dim> &q)
 {
   // store the flags in the internal data object so we can access them
   // in fill_fe_*_values()
@@ -89,13 +88,13 @@ MappingFE<dim, spacedim>::InternalData::initialize(
   const unsigned int n_q_points = q.size();
 
   if (this->update_each & update_covariant_transformation)
-    covariant.resize(n_original_q_points);
+    covariant.resize(n_q_points);
 
   if (this->update_each & update_contravariant_transformation)
-    contravariant.resize(n_original_q_points);
+    contravariant.resize(n_q_points);
 
   if (this->update_each & update_volume_elements)
-    volume_elements.resize(n_original_q_points);
+    volume_elements.resize(n_q_points);
 
   // see if we need the (transformation) shape function values
   // and/or gradients and resize the necessary arrays
@@ -140,7 +139,7 @@ MappingFE<dim, spacedim>::InternalData::initialize_face(
   const Quadrature<dim> &q,
   const unsigned int     n_original_q_points)
 {
-  initialize(update_flags, q, n_original_q_points);
+  reinit(update_flags, q);
 
   if (this->update_each &
       (update_boundary_forms | update_normal_vectors | update_jacobians |
@@ -158,14 +157,13 @@ MappingFE<dim, spacedim>::InternalData::initialize_face(
           unit_tangentials[i].resize(n_original_q_points);
           std::fill(unit_tangentials[i].begin(),
                     unit_tangentials[i].end(),
-                    reference_cell.template unit_tangential_vectors<dim>(i, 0));
+                    reference_cell.template face_tangent_vector<dim>(i, 0));
           if (dim > 2)
             {
               unit_tangentials[n_faces + i].resize(n_original_q_points);
-              std::fill(
-                unit_tangentials[n_faces + i].begin(),
-                unit_tangentials[n_faces + i].end(),
-                reference_cell.template unit_tangential_vectors<dim>(i, 1));
+              std::fill(unit_tangentials[n_faces + i].begin(),
+                        unit_tangentials[n_faces + i].end(),
+                        reference_cell.template face_tangent_vector<dim>(i, 1));
             }
         }
     }
@@ -1060,9 +1058,7 @@ MappingFE<dim, spacedim>::get_data(const UpdateFlags      update_flags,
 {
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> data_ptr =
     std::make_unique<InternalData>(*this->fe);
-  auto &data = dynamic_cast<InternalData &>(*data_ptr);
-  data.initialize(this->requires_update_flags(update_flags), q, q.size());
-
+  data_ptr->reinit(this->requires_update_flags(update_flags), q);
   return data_ptr;
 }
 
@@ -1420,7 +1416,7 @@ namespace internal
                               cross_product_3d(data.aux[0][i], data.aux[1][i]);
                             break;
                           default:
-                            Assert(false, ExcNotImplemented());
+                            DEAL_II_NOT_IMPLEMENTED();
                         }
                   }
                 else //(dim < spacedim)
@@ -1478,7 +1474,7 @@ namespace internal
                           cell->subface_case(face_no), subface_no);
                        output_data.JxW_values[i] *= area_ratio;
 #else
-                      Assert(false, ExcNotImplemented());
+                      DEAL_II_NOT_IMPLEMENTED();
 #endif
                     }
                 }
@@ -1617,9 +1613,8 @@ MappingFE<dim, spacedim>::fill_fe_face_values(
     numbers::invalid_unsigned_int,
     QProjector<dim>::DataSetDescriptor::face(this->fe->reference_cell(),
                                              face_no,
-                                             cell->face_orientation(face_no),
-                                             cell->face_flip(face_no),
-                                             cell->face_rotation(face_no),
+                                             cell->combined_face_orientation(
+                                               face_no),
                                              quadrature),
     quadrature[quadrature.size() == 1 ? 0 : face_no],
     data,
@@ -1665,9 +1660,8 @@ MappingFE<dim, spacedim>::fill_fe_subface_values(
     QProjector<dim>::DataSetDescriptor::subface(this->fe->reference_cell(),
                                                 face_no,
                                                 subface_no,
-                                                cell->face_orientation(face_no),
-                                                cell->face_flip(face_no),
-                                                cell->face_rotation(face_no),
+                                                cell->combined_face_orientation(
+                                                  face_no),
                                                 quadrature.size(),
                                                 cell->subface_case(face_no)),
     quadrature,
@@ -1763,7 +1757,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -1865,7 +1859,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -2035,7 +2029,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -2075,7 +2069,7 @@ namespace internal
                 return;
               }
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
     } // namespace
@@ -2142,7 +2136,7 @@ MappingFE<dim, spacedim>::transform(
                                                                output);
         return;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2191,7 +2185,7 @@ MappingFE<dim, spacedim>::transform(
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2216,7 +2210,7 @@ MappingFE<dim, spacedim>::transform(
                                                               output);
         return;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2276,22 +2270,105 @@ std::vector<Point<spacedim>>
 MappingFE<dim, spacedim>::compute_mapping_support_points(
   const typename Triangulation<dim, spacedim>::cell_iterator &cell) const
 {
-  Assert(
-    check_all_manifold_ids_identical(cell),
-    ExcMessage(
-      "All entities of a cell need to have the same manifold id as the cell has."));
-
-  std::vector<Point<spacedim>> vertices(cell->n_vertices());
-
-  for (const unsigned int i : cell->vertex_indices())
-    vertices[i] = cell->vertex(i);
-
   std::vector<Point<spacedim>> mapping_support_points(
     fe->get_unit_support_points().size());
 
-  cell->get_manifold().get_new_points(vertices,
-                                      mapping_support_point_weights,
-                                      mapping_support_points);
+  std::vector<Point<spacedim>> vertices(cell->n_vertices());
+  for (const unsigned int i : cell->vertex_indices())
+    vertices[i] = cell->vertex(i);
+
+  if (check_all_manifold_ids_identical(cell))
+    {
+      // version 1) all geometric entities have the same manifold:
+
+      cell->get_manifold().get_new_points(vertices,
+                                          mapping_support_point_weights,
+                                          mapping_support_points);
+    }
+  else
+    {
+      // version 1) geometric entities have different manifold
+
+      // helper function to compute mapped points on subentities
+      // note[PM]: this function currently only uses the vertices
+      // of cells to create new points on subentities; however,
+      // one should use all bounding points to create new points
+      // as in the case of MappingQ.
+      const auto process = [&](const auto    &manifold,
+                               const auto    &indices,
+                               const unsigned n_points) {
+        if ((indices.size() == 0) || (n_points == 0))
+          return;
+
+        const unsigned int n_shape_functions =
+          this->fe->reference_cell().n_vertices();
+
+        Table<2, double> mapping_support_point_weights_local(n_points,
+                                                             n_shape_functions);
+        std::vector<Point<spacedim>> mapping_support_points_local(n_points);
+
+        for (unsigned int p = 0; p < n_points; ++p)
+          for (unsigned int i = 0; i < n_shape_functions; ++i)
+            mapping_support_point_weights_local(p, i) =
+              mapping_support_point_weights(
+                indices[p + (indices.size() - n_points)], i);
+
+        manifold.get_new_points(vertices,
+                                mapping_support_point_weights_local,
+                                mapping_support_points_local);
+
+        for (unsigned int p = 0; p < n_points; ++p)
+          mapping_support_points[indices[p + (indices.size() - n_points)]] =
+            mapping_support_points_local[p];
+      };
+
+      // create dummy DoFHandler to extract indices on subobjects
+      const auto                  &fe = *this->fe;
+      Triangulation<dim, spacedim> tria;
+      GridGenerator::reference_cell(tria, fe.reference_cell());
+      DoFHandler<dim, spacedim> dof_handler(tria);
+      dof_handler.distribute_dofs(fe);
+      const auto &cell_ref = dof_handler.begin_active();
+
+      std::vector<types::global_dof_index> indices;
+
+      // add vertices
+      for (const unsigned int i : cell->vertex_indices())
+        mapping_support_points[i] = cell->vertex(i);
+
+      // process and add line support points
+      for (unsigned int l = 0; l < cell_ref->n_lines(); ++l)
+        {
+          const auto accessor = cell_ref->line(l);
+          indices.resize(fe.n_dofs_per_line() + 2 * fe.n_dofs_per_vertex());
+          accessor->get_dof_indices(indices);
+          process(cell->line(l)->get_manifold(), indices, fe.n_dofs_per_line());
+        }
+
+      // process and add face support points
+      if constexpr (dim >= 3)
+        {
+          for (unsigned int f = 0; f < cell_ref->n_faces(); ++f)
+            {
+              const auto accessor = cell_ref->face(f);
+              indices.resize(fe.n_dofs_per_face());
+              accessor->get_dof_indices(indices);
+              process(cell->face(f)->get_manifold(),
+                      indices,
+                      fe.n_dofs_per_quad());
+            }
+        }
+
+      // process and add volume support points
+      if constexpr (dim >= 2)
+        {
+          indices.resize(fe.n_dofs_per_cell());
+          cell_ref->get_dof_indices(indices);
+          process(cell->get_manifold(),
+                  indices,
+                  (dim == 2) ? fe.n_dofs_per_quad() : fe.n_dofs_per_hex());
+        }
+    }
 
   return mapping_support_points;
 }

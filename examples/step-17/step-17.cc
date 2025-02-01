@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2000 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2004 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Author: Wolfgang Bangerth, University of Texas at Austin, 2000, 2004
  *         Wolfgang Bangerth, Texas A&M University, 2016
@@ -23,7 +22,6 @@
 // example programs:
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
-#include <deal.II/base/logstream.h>
 #include <deal.II/base/multithread_info.h>
 #include <deal.II/lac/vector.h>
 #include <deal.II/lac/full_matrix.h>
@@ -160,9 +158,9 @@ namespace Step17
     // and vector types to use parallel PETSc objects instead. Note that
     // we do not use a separate sparsity pattern, since PETSc manages this
     // internally as part of its matrix data structures.
-    Triangulation<dim> triangulation;
-    FESystem<dim>      fe;
-    DoFHandler<dim>    dof_handler;
+    Triangulation<dim>  triangulation;
+    const FESystem<dim> fe;
+    DoFHandler<dim>     dof_handler;
 
     AffineConstraints<double> hanging_node_constraints;
 
@@ -187,8 +185,8 @@ namespace Step17
       Assert(dim >= 2, ExcInternalError());
 
       Point<dim> point_1, point_2;
-      point_1(0) = 0.5;
-      point_2(0) = -0.5;
+      point_1[0] = 0.5;
+      point_2[0] = -0.5;
 
       if (((p - point_1).norm_square() < 0.2 * 0.2) ||
           ((p - point_2).norm_square() < 0.2 * 0.2))
@@ -425,8 +423,8 @@ namespace Step17
   template <int dim>
   void ElasticProblem<dim>::assemble_system()
   {
-    QGauss<dim>   quadrature_formula(fe.degree + 1);
-    FEValues<dim> fe_values(fe,
+    const QGauss<dim> quadrature_formula(fe.degree + 1);
+    FEValues<dim>     fe_values(fe,
                             quadrature_formula,
                             update_values | update_gradients |
                               update_quadrature_points | update_JxW_values);
@@ -913,7 +911,7 @@ namespace Step17
               solution_names.emplace_back("z_displacement");
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_NOT_IMPLEMENTED();
           }
 
         data_out.add_data_vector(localized_solution, solution_names);

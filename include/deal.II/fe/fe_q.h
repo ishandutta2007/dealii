@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2001 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_fe_q_h
 #define dealii_fe_q_h
@@ -31,11 +30,15 @@ DEAL_II_NAMESPACE_OPEN
  */
 
 /**
- * Implementation of a scalar Lagrange finite element @p Qp that yields the
+ * This class provides an implementation of the scalar Lagrange $Q_p$ finite
+ * element on hypercube (line segments, quadrilaterals, or hexahedra) cells that
+ * yields the
  * finite element space of continuous, piecewise polynomials of degree @p p in
  * each coordinate direction. This class is realized using tensor product
  * polynomials based on 1d Lagrange polynomials with equidistant (degree up to
- * 2), Gauss-Lobatto (starting from degree 3), or given support points.
+ * 2), Gauss-Lobatto (starting from degree 3), or given support points. The
+ * corresponding element on simplex (triangular or tetrahedral) cells is
+ * FE_SimplexP, whereas on other cell kinds it is FE_WedgeP and FE_PyramidP.
  *
  * The standard constructor of this class takes the degree @p p of this finite
  * element. Alternatively, it can take a quadrature formula @p points defining
@@ -204,7 +207,7 @@ DEAL_II_NAMESPACE_OPEN
  *     |/       /       |       |/
  *     *-------*        *-------*
  *   @endverbatim
- * The center vertex has number 26.
+ * The center node has number 26.
  *
  * The respective coordinate values of the support points of the shape
  * functions are as follows:

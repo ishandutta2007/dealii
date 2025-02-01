@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2008 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_mapping_q_eulerian_h
@@ -20,7 +19,7 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/mutex.h>
-#include <deal.II/base/smartpointer.h>
+#include <deal.II/base/observer_pointer.h>
 
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_handler.h>
@@ -123,7 +122,12 @@ public:
    * addition to the geometry of the cell.
    */
   virtual boost::container::small_vector<Point<spacedim>,
-                                         GeometryInfo<dim>::vertices_per_cell>
+#ifndef _MSC_VER
+                                         ReferenceCells::max_n_vertices<dim>()
+#else
+                                         GeometryInfo<dim>::vertices_per_cell
+#endif
+                                         >
   get_vertices(const typename Triangulation<dim, spacedim>::cell_iterator &cell)
     const override;
 
@@ -175,14 +179,14 @@ protected:
   /**
    * Reference to the vector of shifts.
    */
-  SmartPointer<const VectorType, MappingQEulerian<dim, VectorType, spacedim>>
+  ObserverPointer<const VectorType, MappingQEulerian<dim, VectorType, spacedim>>
     euler_vector;
 
   /**
    * Pointer to the DoFHandler to which the mapping vector is associated.
    */
-  SmartPointer<const DoFHandler<dim, spacedim>,
-               MappingQEulerian<dim, VectorType, spacedim>>
+  ObserverPointer<const DoFHandler<dim, spacedim>,
+                  MappingQEulerian<dim, VectorType, spacedim>>
     euler_dof_handler;
 
 private:

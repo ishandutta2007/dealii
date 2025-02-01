@@ -1,7 +1,5 @@
-<a name="step-35-results"></a>
 <h1>Results</h1>
 
-<a name="step-35-Re100"></a>
 <h3> Re = 100 </h3>
 
 We run the code with the following <code>parameter-file.prm</code>, which can be found in the
@@ -45,7 +43,7 @@ same directory as the source:
   end
 
   #The output frequency
-  set output = 50
+  set output_interval = 50
 
   #Finally we set the verbosity level
   set verbose = false
@@ -89,7 +87,6 @@ behind the obstacles, with the sign of the vorticity indicating
 whether this is a left or right turning vortex.
 
 
-<a name="step-35-Re500"></a>
 <h3> Re = 500 </h3>
 
 We can change the Reynolds number, $Re$, in the parameter file to a

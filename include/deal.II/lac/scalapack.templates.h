@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2017 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_scalapack_templates_h
 #define dealii_scalapack_templates_h
@@ -946,7 +945,7 @@ Cgerv2d(int /*context*/,
         int /*rsrc*/,
         int /*csrc*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -972,7 +971,7 @@ Cgesd2d(int /*context*/,
         int /*rdest*/,
         int /*cdest*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -998,7 +997,7 @@ ppotrf(const char * /*UPLO*/,
        const int * /*DESCA*/,
        int * /*INFO*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1037,7 +1036,7 @@ pgetrf(const int * /*m*/,
        int * /*ipiv*/,
        int * /*INFO*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1077,7 +1076,7 @@ ppotri(const char * /*UPLO*/,
        const int * /*DESCA*/,
        int * /*INFO*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1119,7 +1118,7 @@ pgetri(const int * /*N*/,
        int * /*liwork*/,
        int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1165,7 +1164,7 @@ ptrtri(const char * /*UPLO*/,
        const int * /*DESCA*/,
        int * /*INFO*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1210,7 +1209,7 @@ ppocon(const char * /*uplo*/,
        const int * /*LIWORK*/,
        int * /*INFO*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1263,7 +1262,7 @@ plansy(const char * /*norm*/,
        const int * /*DESCA*/,
        number * /*work*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline double
@@ -1308,7 +1307,7 @@ pgesv(const int * /*n*/,
       const int * /*descb*/,
       int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1368,7 +1367,7 @@ pgemm(const char * /*transa*/,
       const int * /*JC*/,
       const int * /*DESCC*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1467,7 +1466,7 @@ plange(const char * /*norm*/,
        const int * /*desca*/,
        number * /*work*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline double
@@ -1515,7 +1514,7 @@ psyev(const char * /*jobz*/,
       const int * /*lwork*/,
       int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1575,7 +1574,7 @@ placpy(const char * /*uplo*/,
        const int * /*jb*/,
        const int * /*descb*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1625,7 +1624,7 @@ pgemr2d(const int * /*m*/,
         const int * /*descb*/,
         const int * /*ictxt*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1665,7 +1664,7 @@ template <typename number>
 inline void
 plamch(const int * /*ictxt*/, const char * /*cmach*/, number & /*val*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1713,7 +1712,7 @@ psyevx(const char * /*jobz*/,
        number * /*gap*/,
        int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1864,7 +1863,7 @@ pgesvd(const char * /*jobu*/,
        int * /*lwork*/,
        int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -1974,7 +1973,7 @@ pgels(const char * /*trans*/,
       int * /*lwork*/,
       int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -2036,7 +2035,7 @@ pgeadd(const char * /*transa*/,
        const int * /*JC*/,
        const int * /*DESCC*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -2091,7 +2090,7 @@ ptran(const int * /*m*/,
       const int * /*JC*/,
       const int * /*DESCC*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void
@@ -2156,7 +2155,7 @@ psyevr(const char * /*jobz*/,
        int * /*liwork*/,
        int * /*info*/)
 {
-  Assert(false, dealii::ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 inline void

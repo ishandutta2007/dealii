@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2004 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/lac/petsc_matrix_base.h>
 
@@ -60,6 +59,13 @@ namespace PETScWrappers
       // iterator for an empty line (what
       // would it point to?)
       Assert(ncols != 0, ExcInternalError());
+#    ifdef DEBUG
+      for (PetscInt j = 0; j < ncols; ++j)
+        {
+          const auto column = static_cast<PetscInt>(colnums[j]);
+          AssertIntegerConversion(column, colnums[j]);
+        }
+#    endif
       colnum_cache =
         std::make_shared<std::vector<size_type>>(colnums, colnums + ncols);
       value_cache =
@@ -147,20 +153,22 @@ namespace PETScWrappers
   void
   MatrixBase::clear_row(const size_type row, const PetscScalar new_diag_value)
   {
-    std::vector<size_type> rows(1, row);
-    clear_rows(rows, new_diag_value);
+    clear_rows(ArrayView<const size_type>(row), new_diag_value);
   }
 
 
 
   void
-  MatrixBase::clear_rows(const std::vector<size_type> &rows,
-                         const PetscScalar             new_diag_value)
+  MatrixBase::clear_rows(const ArrayView<const size_type> &rows,
+                         const PetscScalar                 new_diag_value)
   {
     assert_is_compressed();
 
-    // now set all the entries of these rows
-    // to zero
+    // now set all the entries of these rows to zero
+#  ifdef DEBUG
+    for (const auto &row : rows)
+      AssertIntegerConversion(static_cast<PetscInt>(row), row);
+#  endif
     const std::vector<PetscInt> petsc_rows(rows.begin(), rows.end());
 
     // call the functions. note that we have
@@ -188,8 +196,11 @@ namespace PETScWrappers
   {
     assert_is_compressed();
 
-    // now set all the entries of these rows
-    // to zero
+    // now set all the entries of these rows to zero
+#  ifdef DEBUG
+    for (const auto &row : rows)
+      AssertIntegerConversion(static_cast<PetscInt>(row), row);
+#  endif
     const std::vector<PetscInt> petsc_rows(rows.begin(), rows.end());
 
     // call the functions. note that we have
@@ -217,7 +228,10 @@ namespace PETScWrappers
   PetscScalar
   MatrixBase::el(const size_type i, const size_type j) const
   {
-    PetscInt petsc_i = i, petsc_j = j;
+    const auto petsc_i = static_cast<PetscInt>(i);
+    AssertIntegerConversion(petsc_i, i);
+    const auto petsc_j = static_cast<PetscInt>(j);
+    AssertIntegerConversion(petsc_j, j);
 
     PetscScalar value;
 
@@ -390,7 +404,7 @@ namespace PETScWrappers
     // something that is unreasonable. there should simply be a way in PETSc to
     // query the number of entries in a row bypassing the call to compress(),
     // but I can't find one
-    Assert(row < m(), ExcInternalError());
+    AssertIndexRange(row, m());
 
     // get a representation of the present
     // row
@@ -457,6 +471,8 @@ namespace PETScWrappers
   PetscScalar
   MatrixBase::matrix_norm_square(const VectorBase &v) const
   {
+    AssertDimension(m(), v.size());
+
     VectorBase tmp(v);
     vmult(tmp, v);
     return tmp * v;
@@ -467,6 +483,9 @@ namespace PETScWrappers
   MatrixBase::matrix_scalar_product(const VectorBase &u,
                                     const VectorBase &v) const
   {
+    AssertDimension(m(), u.size());
+    AssertDimension(m(), v.size());
+
     VectorBase tmp(u);
     vmult(tmp, v);
     return u * tmp;
@@ -723,11 +742,13 @@ namespace PETScWrappers
 
     // Set options
     PetscErrorCode ierr =
-      PetscViewerSetFormat(PETSC_VIEWER_STDOUT_(comm), format);
+      PetscViewerPushFormat(PETSC_VIEWER_STDOUT_(comm), format);
     AssertThrow(ierr == 0, ExcPETScError(ierr));
 
     // Write to screen
     ierr = MatView(matrix, PETSC_VIEWER_STDOUT_(comm));
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    ierr = PetscViewerPopFormat(PETSC_VIEWER_STDOUT_(comm));
     AssertThrow(ierr == 0, ExcPETScError(ierr));
   }
 

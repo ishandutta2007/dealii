@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2016 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2016 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
 
  * Authors: Ryan Grove, Clemson University
  *          Timo Heister, Clemson University
@@ -20,7 +19,6 @@
 // @sect3{Include files}
 
 #include <deal.II/base/quadrature_lib.h>
-#include <deal.II/base/logstream.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/utilities.h>
 
@@ -48,7 +46,6 @@
 #include <deal.II/fe/fe_values.h>
 
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
 
@@ -116,8 +113,8 @@ namespace Step56
     Assert(component <= 2 + 1, ExcIndexRange(component, 0, 2 + 1));
 
     using numbers::PI;
-    const double x = p(0);
-    const double y = p(1);
+    const double x = p[0];
+    const double y = p[1];
 
     if (component == 0)
       return sin(PI * x);
@@ -136,9 +133,9 @@ namespace Step56
     Assert(component <= 3 + 1, ExcIndexRange(component, 0, 3 + 1));
 
     using numbers::PI;
-    const double x = p(0);
-    const double y = p(1);
-    const double z = p(2);
+    const double x = p[0];
+    const double y = p[1];
+    const double z = p[2];
 
     if (component == 0)
       return 2.0 * sin(PI * x);
@@ -160,8 +157,8 @@ namespace Step56
     Assert(component <= 2, ExcIndexRange(component, 0, 2 + 1));
 
     using numbers::PI;
-    const double x = p(0);
-    const double y = p(1);
+    const double x = p[0];
+    const double y = p[1];
 
     Tensor<1, 2> return_value;
     if (component == 0)
@@ -190,9 +187,9 @@ namespace Step56
     Assert(component <= 3, ExcIndexRange(component, 0, 3 + 1));
 
     using numbers::PI;
-    const double x = p(0);
-    const double y = p(1);
-    const double z = p(2);
+    const double x = p[0];
+    const double y = p[1];
+    const double z = p[2];
 
     Tensor<1, 3> return_value;
     if (component == 0)
@@ -243,8 +240,8 @@ namespace Step56
     Assert(component <= 2, ExcIndexRange(component, 0, 2 + 1));
 
     using numbers::PI;
-    double x = p(0);
-    double y = p(1);
+    const double x = p[0];
+    const double y = p[1];
     if (component == 0)
       return PI * PI * sin(PI * x) + PI * cos(PI * x) * cos(PI * y);
     if (component == 1)
@@ -262,9 +259,9 @@ namespace Step56
     Assert(component <= 3, ExcIndexRange(component, 0, 3 + 1));
 
     using numbers::PI;
-    double x = p(0);
-    double y = p(1);
-    double z = p(2);
+    const double x = p[0];
+    const double y = p[1];
+    const double z = p[2];
     if (component == 0)
       return 2 * PI * PI * sin(PI * x) +
              PI * cos(PI * x) * cos(PI * y) * sin(PI * z);
@@ -304,7 +301,7 @@ namespace Step56
   // Notice how we keep track of the sum of the inner iterations
   // (preconditioner applications).
   template <class PreconditionerAType, class PreconditionerSType>
-  class BlockSchurPreconditioner : public Subscriptor
+  class BlockSchurPreconditioner : public EnableObserverPointer
   {
   public:
     BlockSchurPreconditioner(
@@ -421,11 +418,11 @@ namespace Step56
     const unsigned int pressure_degree;
     const SolverType   solver_type;
 
-    Triangulation<dim> triangulation;
-    FESystem<dim>      velocity_fe;
-    FESystem<dim>      fe;
-    DoFHandler<dim>    dof_handler;
-    DoFHandler<dim>    velocity_dof_handler;
+    Triangulation<dim>  triangulation;
+    const FESystem<dim> velocity_fe;
+    const FESystem<dim> fe;
+    DoFHandler<dim>     dof_handler;
+    DoFHandler<dim>     velocity_dof_handler;
 
     AffineConstraints<double> constraints;
 
@@ -454,8 +451,7 @@ namespace Step56
     , solver_type(solver_type)
     , triangulation(Triangulation<dim>::maximum_smoothing)
     ,
-    // Finite element for the velocity only -- we choose the
-    // $Q_{\text{pressure_degree}}^d$ element:
+    // Finite element for the velocity only:
     velocity_fe(FE_Q<dim>(pressure_degree + 1) ^ dim)
     ,
     // Finite element for the whole system:
@@ -494,7 +490,7 @@ namespace Step56
     // Velocities start at component 0:
     const FEValuesExtractors::Vector velocities(0);
 
-    // ILU behaves better if we apply a reordering to reduce fillin. There
+    // ILU behaves better if we apply a reordering to reduce filling. There
     // is no advantage in doing this for the other solvers.
     if (solver_type == SolverType::FGMRES_ILU)
       {
@@ -610,7 +606,7 @@ namespace Step56
     const bool assemble_pressure_mass_matrix =
       (solver_type == SolverType::UMFPACK) ? false : true;
 
-    QGauss<dim> quadrature_formula(pressure_degree + 2);
+    const QGauss<dim> quadrature_formula(pressure_degree + 2);
 
     FEValues<dim> fe_values(fe,
                             quadrature_formula,
@@ -708,7 +704,7 @@ namespace Step56
 
     mg_matrices = 0.;
 
-    QGauss<dim> quadrature_formula(pressure_degree + 2);
+    const QGauss<dim> quadrature_formula(pressure_degree + 2);
 
     FEValues<dim> fe_values(velocity_fe,
                             quadrature_formula,

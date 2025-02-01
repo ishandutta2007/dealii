@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2020 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_vector_tools_boundary_templates_h
@@ -1123,14 +1122,14 @@ namespace VectorTools
             GeometryInfo<dim>::vertices_per_face * fe.n_dofs_per_vertex() +
             line * fe.n_dofs_per_line() + line_dof_idx;
 
-          // Note, assuming that the edge orientations are "standard"
-          //       i.e. cell->line_orientation(line) = true.
-          Assert(cell->line_orientation(line),
+          // Note, assuming that the edge orientations are "standard", i.e.,
+          //       cell->line_orientation(line) =
+          //       numbers::default_geometric_orientation
+          Assert(cell->line_orientation(line) ==
+                   numbers::default_geometric_orientation,
                  ExcMessage("Edge orientation does not meet expectation."));
           // Next, translate from face to cell. Note, this might be assuming
-          // that the edge orientations are "standard" (not sure any more at
-          // this time), i.e.
-          //       cell->line_orientation(line) = true.
+          // that the edge orientations are "standard"
           const unsigned int cell_dof_idx =
             fe.face_to_cell_index(face_dof_idx, face);
 
@@ -1154,7 +1153,7 @@ namespace VectorTools
               dof_is_of_interest = true;
             }
           else
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
 
           if (dof_is_of_interest)
             {
@@ -1208,9 +1207,9 @@ namespace VectorTools
           Point<dim> shifted_reference_point_2 =
             reference_quadrature_points[q_point];
 
-          shifted_reference_point_1(edge_coordinate_direction[face][line]) +=
+          shifted_reference_point_1[edge_coordinate_direction[face][line]] +=
             tol;
-          shifted_reference_point_2(edge_coordinate_direction[face][line]) -=
+          shifted_reference_point_2[edge_coordinate_direction[face][line]] -=
             tol;
           Tensor<1, dim> tangential =
             (0.5 *
@@ -1287,7 +1286,7 @@ namespace VectorTools
     {
       // dummy implementation of above function
       // for all other dimensions
-      Assert(false, ExcInternalError());
+      DEAL_II_ASSERT_UNREACHABLE();
     }
 
 
@@ -1559,9 +1558,7 @@ namespace VectorTools
                         line * fe.n_dofs_per_line() + line_dof_idx;
 
                       // Next, translate from face to cell. Note, this might be
-                      // assuming that the edge orientations are "standard" (not
-                      // sure any more at this time), i.e.
-                      //       cell->line_orientation(line) = true.
+                      // assuming that the edge orientations are "standard"
                       const unsigned int cell_dof_idx =
                         fe.face_to_cell_index(face_dof_idx, face);
 
@@ -1590,7 +1587,7 @@ namespace VectorTools
                           dof_is_of_interest = true;
                         }
                       else
-                        Assert(false, ExcNotImplemented());
+                        DEAL_II_NOT_IMPLEMENTED();
 
                       if (dof_is_of_interest)
                         {
@@ -1780,7 +1777,7 @@ namespace VectorTools
               break;
             }
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
     }
 
@@ -2081,7 +2078,7 @@ namespace VectorTools
               break;
             }
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
     }
 
@@ -2192,11 +2189,8 @@ namespace VectorTools
             dof_values(i) +=
               tmp * (normals[q_point] *
                      fe_values[vec].value(
-                       fe.face_to_cell_index(i,
-                                             face,
-                                             cell->face_orientation(face),
-                                             cell->face_flip(face),
-                                             cell->face_rotation(face)),
+                       fe.face_to_cell_index(
+                         i, face, cell->combined_face_orientation(face)),
                        q_point));
         }
 
@@ -2213,9 +2207,7 @@ namespace VectorTools
             fe.get_nonzero_components(fe.face_to_cell_index(
               i,
               face,
-              cell->face_orientation(face),
-              cell->face_flip(face),
-              cell->face_rotation(face)))[first_vector_component])
+              cell->combined_face_orientation(face)))[first_vector_component])
           constraints.add_constraint(face_dof_indices[i],
                                      {},
                                      (std::abs(dof_values[i]) > 1e-14 ?
@@ -2238,7 +2230,7 @@ namespace VectorTools
       const std::vector<DerivativeForm<1, dim, dim>> &,
       AffineConstraints<number> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
     // This function computes the projection of the boundary function on the
@@ -2303,11 +2295,8 @@ namespace VectorTools
             dof_values_local(i) +=
               tmp * (normals[q_point] *
                      fe_values[vec].value(
-                       fe.face_to_cell_index(i,
-                                             face,
-                                             cell->face_orientation(face),
-                                             cell->face_flip(face),
-                                             cell->face_rotation(face)),
+                       fe.face_to_cell_index(
+                         i, face, cell->combined_face_orientation(face)),
                        q_point));
         }
 
@@ -2322,9 +2311,7 @@ namespace VectorTools
             fe.get_nonzero_components(fe.face_to_cell_index(
               i,
               face,
-              cell->face_orientation(face),
-              cell->face_flip(face),
-              cell->face_rotation(face)))[first_vector_component])
+              cell->combined_face_orientation(face)))[first_vector_component])
           {
             dof_values[face_dof_indices[i]]     = dof_values_local(i);
             projected_dofs[face_dof_indices[i]] = fe.degree;
@@ -2349,7 +2336,7 @@ namespace VectorTools
       std::vector<number> &,
       std::vector<types::global_dof_index> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
   } // namespace internals
 
@@ -2522,7 +2509,7 @@ namespace VectorTools
           }
 
         default:
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
       }
   }
 
@@ -2680,7 +2667,7 @@ namespace VectorTools
           }
 
         default:
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
       }
   }
 } // namespace VectorTools

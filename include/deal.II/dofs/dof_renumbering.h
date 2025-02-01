@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2003 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_dof_renumbering_h
 #define dealii_dof_renumbering_h
@@ -162,12 +161,13 @@ class MatrixFree;
  * all the pressures so that the resulting matrix naturally decomposes into a
  * $2\times 2$ system.
  *
- * This kind of numbering may be obtained by calling the component_wise()
- * function of this class. Since it does not touch the order of indices within
- * each component, it may be worthwhile to first renumber using the Cuthill-
- * McKee or a similar algorithm and afterwards renumbering component-wise.
- * This will bring out the matrix structure and additionally have a good
- * numbering within each block.
+ * This kind of numbering may be obtained by calling the
+ * component_wise() function of this class. Since it does not touch
+ * the order of indices within each component, it may be worthwhile to
+ * first renumber using the Cuthill-McKee or a similar algorithm and
+ * afterwards renumbering component-wise.  This will bring out the
+ * matrix structure and additionally have a good numbering within each
+ * block.
  *
  * The component_wise() function allows not only to honor enumeration based on
  * vector components, but also allows to group together vector components into
@@ -749,12 +749,12 @@ namespace DoFRenumbering
    * Does not perform the renumbering on the DoFHandler dofs but returns the
    * renumbering vector.
    */
-  template <int dim, int spacedim, class ITERATOR, class ENDITERATOR>
+  template <int dim, int spacedim, class IteratorType, class EndIteratorType>
   types::global_dof_index
   compute_block_wise(std::vector<types::global_dof_index> &new_dof_indices,
-                     const ITERATOR                       &start,
-                     const ENDITERATOR                    &end,
-                     bool                                  is_level_operation);
+                     const IteratorType                   &start,
+                     const EndIteratorType                &end,
+                     const bool                            is_level_operation);
 
   /**
    * @}

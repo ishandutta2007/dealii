@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2021 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -95,7 +94,7 @@ namespace FE_P_BubblesImplementation
                           reference_cell.face_to_cell_vertices(
                             face_no,
                             face_vertex_no,
-                            ReferenceCell::default_combined_face_orientation());
+                            numbers::default_geometric_orientation);
 
                         midpoint +=
                           reference_cell.template vertex<dim>(vertex_no);
@@ -111,7 +110,7 @@ namespace FE_P_BubblesImplementation
             return points;
           }
         default:
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
       }
     return points;
   }
@@ -178,7 +177,7 @@ namespace FE_P_BubblesImplementation
                       vertices.push_back(reference_cell.face_to_cell_vertices(
                         face_no,
                         face_vertex_no,
-                        ReferenceCell::default_combined_face_orientation()));
+                        numbers::default_geometric_orientation));
 
                     Assert(vertices.size() == 3, ExcInternalError());
                     auto b =
@@ -268,6 +267,7 @@ FE_SimplexP_Bubbles<dim, spacedim>::FE_SimplexP_Bubbles(
   : FE_SimplexPoly<dim, spacedim>(
       FE_P_BubblesImplementation::get_basis<dim>(degree),
       FE_P_BubblesImplementation::get_fe_data<dim>(degree),
+      false,
       FE_P_BubblesImplementation::unit_support_points<dim>(degree),
       {FE_P_BubblesImplementation::unit_support_points<dim - 1>(degree)},
       // Interface constraints are not yet implemented

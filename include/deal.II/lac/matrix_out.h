@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2021 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2001 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_matrix_out_h
 #  define dealii_matrix_out_h
@@ -339,8 +338,7 @@ MatrixOut::build_patches(const Matrix      &matrix,
       --gridpoints_y;
     }
 
-  // first clear old data and set it
-  // to virgin state
+  // first clear old data and re-set the object to a correctly sized state:
   patches.clear();
   patches.resize((gridpoints_x) * (gridpoints_y));
 
@@ -359,14 +357,14 @@ MatrixOut::build_patches(const Matrix      &matrix,
         // matrix, rather than perpendicular to it. this has the advantage that,
         // for example, the unit matrix is plotted as a straight ridge, rather
         // than as a series of bumps and valleys along the diagonal
-        patches[index].vertices[0](0) = j;
-        patches[index].vertices[0](1) = -static_cast<signed int>(i);
-        patches[index].vertices[1](0) = j;
-        patches[index].vertices[1](1) = -static_cast<signed int>(i + 1);
-        patches[index].vertices[2](0) = j + 1;
-        patches[index].vertices[2](1) = -static_cast<signed int>(i);
-        patches[index].vertices[3](0) = j + 1;
-        patches[index].vertices[3](1) = -static_cast<signed int>(i + 1);
+        patches[index].vertices[0][0] = j;
+        patches[index].vertices[0][1] = -static_cast<signed int>(i);
+        patches[index].vertices[1][0] = j;
+        patches[index].vertices[1][1] = -static_cast<signed int>(i + 1);
+        patches[index].vertices[2][0] = j + 1;
+        patches[index].vertices[2][1] = -static_cast<signed int>(i);
+        patches[index].vertices[3][0] = j + 1;
+        patches[index].vertices[3][1] = -static_cast<signed int>(i + 1);
         // next scale all the patch
         // coordinates by the block
         // size, to get original

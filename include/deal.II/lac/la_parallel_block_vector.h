@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2016 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_la_parallel_block_vector_h
 #define dealii_la_parallel_block_vector_h
@@ -209,15 +208,27 @@ namespace LinearAlgebra
       operator=(const value_type s);
 
       /**
-       * Copy operator for arguments of the same type. Resize the present
-       * vector if necessary.
+       * Copy operator for arguments of the same type. Resize the present vector
+       * if necessary to the correct number of blocks, then copy the individual
+       * blocks from `v` using the copy-assignment operator of the class that
+       * represents the individual blocks.
+       *
+       * Copying the vectors that make up individual blocks can have complex
+       * semantics in parallel vector classes. See the information provided
+       * by the class used to represent the individual blocks.
        */
       BlockVector &
       operator=(const BlockVector &V);
 
       /**
-       * Copy operator for template arguments of different types. Resize the
-       * present vector if necessary.
+       * Copy operator for arguments of different type. Resize the present
+       * vector if necessary to the correct number of blocks, then copy the
+       * individual blocks from `v` using the copy-assignment operator of the
+       * class that represents the individual blocks.
+       *
+       * Copying the vectors that make up individual blocks can have complex
+       * semantics in parallel vector classes. See the information provided
+       * by the class used to represent the individual blocks.
        */
       template <class Number2>
       BlockVector &
@@ -508,7 +519,7 @@ namespace LinearAlgebra
        * functions.
        */
       void
-      swap(BlockVector<Number> &v);
+      swap(BlockVector<Number> &v) noexcept;
       /** @} */
 
       /**
@@ -808,7 +819,7 @@ namespace LinearAlgebra
 template <typename Number>
 inline void
 swap(LinearAlgebra::distributed::BlockVector<Number> &u,
-     LinearAlgebra::distributed::BlockVector<Number> &v)
+     LinearAlgebra::distributed::BlockVector<Number> &v) noexcept
 {
   u.swap(v);
 }

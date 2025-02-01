@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2010 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_types_h
 #define dealii_types_h
@@ -31,6 +30,15 @@ DEAL_II_NAMESPACE_OPEN
  */
 namespace types
 {
+  /**
+   * The type used to represent face and line orientations.
+   *
+   * See the
+   * @ref GlossFaceOrientation "glossary"
+   * for more information.
+   */
+  using geometric_orientation = unsigned char;
+
   /**
    * The type used to denote subdomain_ids of cells.
    *
@@ -169,8 +177,11 @@ namespace types
 
   /**
    * The type used to denote geometric entity types.
+   *
+   * @deprecated This type was previously only used in library internals and is
+   * deprecated without replacement.
    */
-  using geometric_entity_type = std::uint8_t;
+  using geometric_entity_type DEAL_II_DEPRECATED_EARLY = std::uint8_t;
 } // namespace types
 
 /**
@@ -327,6 +338,29 @@ namespace numbers
     static_cast<types::manifold_id>(-1);
 
   /**
+   * Value indicating that a face or line is in its default orientation.
+   *
+   * See the
+   * @ref GlossFaceOrientation "glossary"
+   * for more information.
+   */
+  const types::geometric_orientation default_geometric_orientation =
+    static_cast<types::geometric_orientation>(0b001);
+
+  /**
+   * Value indicating that a line is in the reverse orientation. Since lines can
+   * only have two possible orientations, this value and
+   * default_geometric_orientation completely encode the possible values for
+   * line orientations.
+   *
+   * See the
+   * @ref GlossFaceOrientation "glossary"
+   * for more information.
+   */
+  const types::geometric_orientation reverse_line_orientation =
+    static_cast<types::geometric_orientation>(0b000);
+
+  /**
    * A special id for an invalid subdomain id. This value may not be used as a
    * valid id but is used, for example, for default arguments to indicate a
    * subdomain id that is not to be used.
@@ -354,7 +388,7 @@ namespace numbers
    * @ref GlossArtificialCell "artificial cells"
    * as well as the
    * @ref distributed
-   * module for more information.
+   * topic for more information.
    *
    * This value is an example of an
    * @ref GlossInvalidValue "invalid value".

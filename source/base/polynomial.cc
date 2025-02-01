@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2000 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/memory_consumption.h>
@@ -66,8 +65,8 @@ namespace Polynomials
     for (unsigned int i = 0; i < supp.size(); ++i)
       if (i != center)
         {
-          lagrange_support_points.push_back(supp[i](0));
-          tmp_lagrange_weight *= supp[center](0) - supp[i](0);
+          lagrange_support_points.push_back(supp[i][0]);
+          tmp_lagrange_weight *= supp[center][0] - supp[i][0];
         }
 
     // check for underflow and overflow
@@ -571,7 +570,7 @@ namespace Polynomials
         std::vector<Point<1>> points(n + 1);
         const double          one_over_n = 1. / n;
         for (unsigned int k = 0; k <= n; ++k)
-          points[k](0) = static_cast<double>(k) * one_over_n;
+          points[k][0] = static_cast<double>(k) * one_over_n;
         return points;
       }
     } // namespace LagrangeEquidistantImplementation
@@ -650,7 +649,7 @@ namespace Polynomials
             break;
           }
         default:
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
       }
 
     Assert(x != nullptr, ExcInternalError());
@@ -711,7 +710,7 @@ namespace Polynomials
     // Gauss-Legendre quadrature formula
     if (k > 0)
       {
-        QGauss<1> gauss(k);
+        const QGauss<1> gauss(k);
         for (unsigned int i = 0; i < k; ++i)
           this->lagrange_support_points[i] = gauss.get_points()[i][0];
       }
@@ -1140,8 +1139,8 @@ namespace Polynomials
       // Note that the polynomials are not yet normalized here, which is not
       // necessary because we are only looking for the x_star where the matrix
       // entry is zero, for which the constants do not matter.
-      QGauss<1> gauss(degree + 1);
-      double    integral_left = 0, integral_right = 0;
+      const QGauss<1> gauss(degree + 1);
+      double          integral_left = 0, integral_right = 0;
       for (unsigned int q = 0; q < gauss.size(); ++q)
         {
           const double x               = gauss.point(q)[0];

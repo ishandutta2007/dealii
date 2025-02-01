@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2005 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 /**
@@ -97,8 +96,8 @@
  *
  * Splitting matrices and vectors into blocks is supported by the
  * BlockSparseMatrix, BlockVector, and related classes. See the
- * overview of the various linear algebra classes in the @ref LAC
- * module. The objects present two interfaces: one that makes the
+ * overview of the various linear algebra classes in the
+ * @ref LAC topic. The objects present two interfaces: one that makes the
  * object look like a matrix or vector with global indexing
  * operations, and one that makes the object look like a collection of
  * sub-blocks that can be individually addressed. Depending on
@@ -151,7 +150,7 @@
  * <i>Implementation:</i>
  * deal.II has a number of different finite element classes, all of which are
  * derived from the FiniteElement base class
- * (see the @ref feall "module on finite element classes").
+ * (see the @ref feall "topic on finite element classes").
  * With one exception, whether they are scalar or
  * vector valued, they all define a single block: all vector components the
  * finite element defines through its FiniteElement::n_components() function
@@ -203,7 +202,7 @@
  * of creating the Stokes element with two blocks right away.
  *
  * More information on this topic can be found in the documentation of
- * FESystem, the @ref vector_valued module and the tutorial programs
+ * FESystem, the @ref vector_valued topic and the tutorial programs
  * referenced therein.
  *
  * <i>Selecting blocks:</i>
@@ -499,6 +498,48 @@
  * </dd>
  *
  *
+ * <dt class="glossary">@anchor GlossCollectiveOperation <b>Collective operation</b></dt>
+ * <dd>
+ *   When running programs in parallel using MPI, a <em>collective
+ *   operation</em> is one in which all processes on an
+ *   @ref GlossMPICommunicator "MPI communicator"
+ *   have to participate. At its core, the concept of collective operations
+ *   rests on the mental model that MPI traditionally uses, namely where
+ *   processes communicate by sending messages to each other; in this model,
+ *   nothing happens if one process sends a message but the receiving process
+ *   does not expect or respond to it, or if one process needs access to a
+ *   piece of data stored elsewhere, but the storing process does not send it.
+ *
+ *   Collective operations are then operations that need to be called on all
+ *   processes at the same time to execute. An obvious example is calling the
+ *   `MPI_Sum` function in which every process provides a number that is then
+ *   summed over all processes. If in a program running with 4 processes only
+ *   three processes call `MPI_Sum`, the program will hang until the fourth
+ *   process eventually also gets to the place where this function is called.
+ *   If the fourth process never calls that function, for example because it
+ *   calls another MPI function in the belief that the other processes called
+ *   that function as well, a "deadlock" results: Every process is now waiting
+ *   for something to happen that cannot happen.
+ *
+ *   Many functions in deal.II are "collective operations" because internally
+ *   they call MPI functions that are collective. For some, this is obvious,
+ *   such as when you call
+ *   parallel::distributed::Triangulation::execute_coarsening_and_refinement()
+ *   in step-40, given that this function refines a mesh that is stored
+ *   in parallel on all processes in a parallel universe. In some other
+ *   cases, the name of the function is a hint that a function is collective,
+ *   such as in
+ *   GridTools::distributed_compute_point_locations() or
+ *   GridTools::build_global_description_tree(), where the "distributed"
+ *   and "global" components of the names are an indication; the latter
+ *   function also takes an explicit MPI communicator as argument. For yet
+ *   other functions, it is perhaps not as obvious that a function is
+ *   a collective operation. GridTools::volume() is an example; it is
+ *   collective because each process computes the volume of those cells it
+ *   locally owns, and these contributions then have to be added up.
+ * </dd>
+ *
+ *
  * <dt class="glossary">@anchor GlossColorization <b>Colorization</b></dt>
  * <dd><em>Colorization</em> is the process of marking certain parts of a
  * Triangulation with different labels. The use of the word <em>color</em>
@@ -535,12 +576,12 @@
  * call the elements of the vector-valued solution <i>components</i> in
  * deal.II. To be well-posed, for the solution to have $n$ components, there
  * need to be $n$ partial differential equations to describe them. This
- * concept is discussed in great detail in the @ref vector_valued module.
+ * concept is discussed in great detail in the @ref vector_valued topic.
  *
  * In finite element programs, one frequently wants to address individual
  * elements (components) of this vector-valued solution, or sets of
  * components. For example, we do this extensively in step-8, and a lot
- * of documentation is also provided in the module on
+ * of documentation is also provided in the topic on
  * @ref vector_valued "Handling vector valued problems". If you are thinking
  * only in terms of the partial differential equation (not in terms of
  * its discretization), then the concept of <i>components</i> is the natural
@@ -736,7 +777,7 @@
  * <dt class="glossary">@anchor GlossDevice <b>Device</b></dt>
  *
  * <dd> We commonly refer to GPUs as "devices" in deal.II. The context is
- * always related to Kokkos or CUDA that motivated using this term.
+ * always related to Kokkos that motivated using this term.
  * Occasionally, we also call data corresponding to MemorySpace::Default "device data"
  * (even though it is allocated in CPU memory if Kokkos was configured without
  * a GPU backend) to distinguish between MemorySpace::Default and MemorySpace::Host.
@@ -827,7 +868,7 @@
  * can change all direction flags of a triangulation using the
  * Triangulation::flip_all_direction_flags() function.
  *
- * The flag is necessary to make cases like this work: assume we have a
+ * The flag is necessary to make cases like this work: Assume we have a
  * one-dimensional mesh embedded in a two-dimensional space,
  *
  *   @image html direction_flag.png "One dimensional mesh in two dimensions"
@@ -863,6 +904,14 @@
  * dimensions. We note that it would not be possible to find consistent
  * direction flags if the two-dimensional manifold is not orientable; such
  * manifolds are not currently supported by deal.II.
+ *
+ * Finally, the direction flag cannot be used for triangulations where
+ * `spacedim>dim+1`, such as for meshes with one-dimensional cells in 3d.
+ * In these cases, the normal vector to a cell does not simply point to
+ * one side or the other of a cell, but must lie in a two-dimensional sub-space
+ * perpendicular to the cell. As a consequence, we cannot make normal vectors
+ * consistent between adjacent cells simply by flipping it from one side to
+ * the other.
  * </dd>
  *
  *
@@ -1130,9 +1179,9 @@
  * 0...49 of a vector and processor one stores elements 50...99,
  * then processor one is out of luck accessing element 42 of this
  * vector: it is not stored here and the value can not be assessed.
- * This will result in an assertion.
+ * This will result in a failed assertion.
  *
- * On the other hand, there are many situations where one needs to
+ * On the other hand, there are many situations where one *needs* to
  * know vector elements that aren't locally owned, for example to
  * evaluate the solution on a locally owned cell (see
  * @ref GlossLocallyOwnedCell) for which one of the degrees of freedom
@@ -1141,7 +1190,7 @@
  * and for which the neighboring cell may be the owner -- in other
  * words, the degree of freedom is not a
  * @ref GlossLocallyOwnedDof "locally owned" but instead only a
- * @ref GlossLocallyActiveDof "locally active DoFs". The values of such
+ * @ref GlossLocallyActiveDof "locally active" DoF. The values of such
  * degrees of freedom are typically stored on the machine that owns the
  * degree of freedom and, consequently, would not be accessible on the
  * current machine.
@@ -1185,7 +1234,20 @@
  * a mirror value of a primary location as there is no owner of each
  * element.
  *
- * @note The @ref distributed documentation module provides a brief
+ * In the end, there are two key take-away messages from the separation between
+ * ghosted and non-ghosted vectors:
+ * - Ghosted vectors are read-only. You cannot write into them, or add
+ *   one such vector into another.
+ * - Even if every process participates in storing a vector with
+ *   ghost elements, not all elements of the vector may be stored anywhere;
+ *   some elements may be stored on multiple processes but no process may
+ *   be a designated "owner" of these elements. As a consequence, reduction
+ *   operations such as dot products or norms may not be computed on
+ *   vectors with ghost elements because in these storage schemes, it is
+ *   not possible to ensure that each entry of the vector is counted exactly
+ *   once.
+ *
+ * @note The @ref distributed documentation topic provides a brief
  * overview of where the different kinds of vectors are typically
  * used.
  * </dd>
@@ -1412,7 +1474,7 @@
  *
  * <dt class="glossary">@anchor GlossLocallyOwnedCell <b>Locally owned cell</b></dt>
  * <dd>This concept identifies a subset of all cells when using
- * distributed meshes, see the @ref distributed module. In such meshes, each
+ * distributed meshes, see the @ref distributed topic. In such meshes, each
  * cell is owned by exactly one processor. The locally owned ones are those
  * owned by the current processor.
  *
@@ -1425,7 +1487,7 @@
  *
  * <dt class="glossary">@anchor GlossLocallyOwnedDof <b>Locally owned degrees of freedom</b></dt>
  * <dd>This concept identifies a subset of all degrees of freedom when using
- * distributed meshes, see the @ref distributed module.  Locally owned degrees
+ * distributed meshes, see the @ref distributed topic.  Locally owned degrees
  * of freedom live on locally owned cells. Since degrees of freedom are owned
  * by only one processor, degrees of freedom on interfaces between cells owned
  * by different processors may be owned by one or the other, so not all
@@ -1439,7 +1501,7 @@
  *
  * <dt class="glossary">@anchor GlossLocallyActiveDof <b>Locally active degrees of freedom</b></dt>
  * <dd>This concept identifies a subset of all degrees of freedom when using
- * distributed meshes, see the @ref distributed module.  Locally active degrees
+ * distributed meshes, see the @ref distributed topic.  Locally active degrees
  * of freedom are those that live on locally owned cells. Degrees of freedom
  * on interfaces between cells owned by different processors therefore belong
  * to the set of locally active degrees of freedom for more than one processor.
@@ -1452,7 +1514,7 @@
  *
  * <dt class="glossary">@anchor GlossLocallyRelevantDof <b>Locally relevant degrees of freedom</b></dt>
  * <dd>This concept identifies a subset of all degrees of freedom when using
- * distributed meshes, see the @ref distributed module.  Locally relevant
+ * distributed meshes, see the @ref distributed topic.  Locally relevant
  * degrees of freedom are those that live on locally owned or ghost cells.
  * Consequently, they may be owned by different processors.
  *
@@ -1533,8 +1595,12 @@
  *
  * <dd> Every object that makes up a Triangulation (cells, faces,
  * edges, etc.), is associated with a unique number (of type
- * types::manifold_id) that is used to identify which manifold object
- * is responsible to generate new points when the mesh is refined.
+ * types::manifold_id) which is used to identify which Manifold object
+ * describes the coordinate system on that cell, e.g., a PolarManifold will
+ * perform calculations in polar coordinates. For example, Manifold objects
+ * are responsible for generating new points when a Triangulation is refined,
+ * defining the locations of @ref GlossSupport "support points", and defining
+ * the locations of quadrature points.
  *
  * By default, all manifold indicators of a mesh are set to
  * numbers::flat_manifold_id. A typical piece of code that sets the
@@ -1545,34 +1611,27 @@
  * @code
  * for (auto &cell : triangulation.active_cell_iterators())
  *   if (cell->center()[0] < 0)
- *     cell->set_manifold_id (42);
+ *     cell->set_manifold_id(42);
  * @endcode
  *
  * Here we call the function TriaAccessor::set_manifold_id(). It may
- * also be appropriate to call TriaAccessor::set_all_manifold_ids
+ * also be appropriate to call TriaAccessor::set_all_manifold_ids()
  * instead, to set recursively the manifold id on each face (and edge,
  * if in 3d). To query the manifold indicator of a particular object
  * edge, use TriaAccessor::manifold_id().
  *
- * The code above only sets the manifold indicators of a particular
- * part of the Triangulation, but it does not by itself change the way
- * the Triangulation class treats this object for the purposes of mesh
- * refinement. For this, you need to call Triangulation::set_manifold()
- * to associate a manifold object with a particular manifold
- * indicator. This allows the Triangulation objects to use a different
- * method of finding new points on cells, faces or edges to be
- * refined; the default is to use a FlatManifold object for all faces
- * and edges.
+ * Every manifold id set on a Triangulation must have an associated Manifold
+ * object. This is assigned via Triangulation::set_manifold().
  *
  * @note Manifold indicators are inherited from parents to their
  * children upon mesh refinement. Some more information about manifold
  * indicators is also presented in a section of the documentation of
  * the Triangulation class as well as in the
- * @ref manifold "Manifold documentation module". Manifold indicators
+ * @ref manifold "Manifold documentation topic". Manifold indicators
  * are used in step-53 and step-54.
  * </dd>
  *
- * @see @ref manifold "The module on Manifolds"
+ * @see @ref manifold "The topic on Manifolds"
  *
  *
  * <dt class="glossary">@anchor GlossMassMatrix <b>Mass matrix</b></dt>

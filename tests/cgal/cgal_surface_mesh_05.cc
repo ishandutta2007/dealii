@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 // Performs the following: deal.II Triangulations -> CGAL::Surface_mesh(es) ->
 // Perform boolean operation -> deal.II tria.
@@ -87,7 +86,7 @@ test()
   GridGenerator::hyper_cube(tria1, 0.5, 1.5);
   tria0.refine_global(3);
   tria1.refine_global(3);
-  GridTools::rotate(numbers::PI_4, 2, tria1);
+  GridTools::rotate(Tensor<1, 3>{{0., 0., 1.}}, numbers::PI_4, tria1);
 
   // Move to CGAL surfaces
   dealii_tria_to_cgal_surface_mesh(tria0, surface_mesh0);

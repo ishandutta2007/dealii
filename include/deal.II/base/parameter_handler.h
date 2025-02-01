@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1998 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_parameter_handler_h
 #define dealii_parameter_handler_h
@@ -19,9 +18,9 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/patterns.h>
-#include <deal.II/base/subscriptor.h>
 
 #include <boost/archive/basic_archive.hpp>
 #include <boost/property_tree/ptree_fwd.hpp>
@@ -852,7 +851,7 @@ class MultipleParameterLoop;
  *
  * @ingroup input
  */
-class ParameterHandler : public Subscriptor
+class ParameterHandler : public EnableObserverPointer
 {
 public:
   /**
@@ -896,14 +895,6 @@ public:
     PRM = 0x0010,
 
     /**
-     * Write human readable output suitable to be read by
-     * ParameterHandler::parse_input() again.
-     *
-     * @deprecated Use `PRM` instead of `Text`.
-     */
-    Text = PRM,
-
-    /**
      * Write parameters as a LaTeX table.
      */
     LaTeX = 0x0020,
@@ -939,14 +930,6 @@ public:
 
     /**
      * Write the content of ParameterHandler without comments or changed default
-     * values.
-     *
-     * @deprecated Use `ShortPRM` instead of `ShortText`.
-     */
-    ShortText = ShortPRM,
-
-    /**
-     * Write the content of ParameterHandler without comments or changed default
      * values as a XML file.
      */
     ShortXML = XML | Short,
@@ -962,6 +945,11 @@ public:
      * values as a LaTeX file.
      */
     ShortLaTeX = LaTeX | Short,
+
+    /**
+     * Write out only parameters with changed values.
+     */
+    KeepOnlyChanged = 0x0200,
   };
 
 
@@ -1129,6 +1117,26 @@ public:
                 const bool                   has_to_be_set = false);
 
   /**
+   * Mark a previously declared parameter as deprecated. This will cause an
+   * exception of type ExcEncounteredDeprecatedEntries to be thrown if
+   * the parameter is used in an input file that is parsed by the
+   * parse_input() function.
+   *
+   * The exception message will list the name of the parameter(s) that
+   * were encountered in the input file.
+   *
+   * @param entry The name of the parameter to be marked as deprecated.
+   * @param is_deprecated An optional parameter that can be used to
+   *  set the deprecation status of the parameter. If set to true, the
+   *  parameter will be marked as deprecated. This is the default behavior.
+   *  If set to false, the parameter will be marked as not deprecated.
+   *  This is useful if a parameter is marked as deprecated by
+   *  one function, but another function wants to keep using it.
+   */
+  void
+  mark_as_deprecated(const std::string &entry, const bool is_deprecated = true);
+
+  /**
    * Attach an action to the parameter with name @p entry in the current
    * section. The action needs to be a function-like object that takes the
    * value of the parameter as a (string) argument. See the general
@@ -1253,10 +1261,11 @@ public:
                 const bool         alias_is_deprecated = false);
 
   /**
-   * Enter a subsection. If it does not yet exist, create it.
+   * Enter a subsection. If it does not yet exist, create it if requested.
    */
   void
-  enter_subsection(const std::string &subsection);
+  enter_subsection(const std::string &subsection,
+                   const bool         create_path_if_needed = true);
 
   /**
    * Leave present subsection.
@@ -1271,6 +1280,35 @@ public:
    */
   bool
   subsection_path_exists(const std::vector<std::string> &sub_path) const;
+
+  /**
+   * Return the string that identifies the current path into the property
+   * tree. The path elements are separated by the path_separator, which is a
+   * '.'. This is only a path, i.e., it is not terminated by the path_separator
+   * character.
+   *
+   * This function simply calls collate_path_string() with
+   * @p subsection_path as argument.
+   */
+  std::string
+  get_current_path() const;
+
+  /**
+   * Given the name of an entry as argument, the function computes a full path
+   * into the parameter tree using the current subsection. The path elements are
+   * separated by the path_separator, which is a '.'.
+   */
+  std::string
+  get_current_full_path(const std::string &name) const;
+
+  /**
+   * This function computes a full path into the parameter tree given a path
+   * from the current subsection and the name of an entry. The path elements are
+   * separated by the path_separator, which is a '.'.
+   */
+  std::string
+  get_current_full_path(const std::vector<std::string> &sub_path,
+                        const std::string              &name) const;
 
   /**
    * Return value of entry @p entry_string.  If the entry was changed,
@@ -1517,8 +1555,8 @@ public:
 
   /**
    * Print parameters to a logstream. This function allows to print all
-   * parameters into a log-file. Sections will be indented in the usual log-
-   * file style.
+   * parameters into a log-file. Sections will be indented in the usual
+   * log-file style.
    *
    * All current parameters and subsections are sorted
    * alphabetically by default.
@@ -1630,6 +1668,25 @@ public:
   DeclException1(ExcEntryAlreadyExists,
                  std::string,
                  << "The following entry already exists: " << arg1 << '.');
+
+  /**
+   * Exception
+   */
+  DeclException3(ExcEntryIsDeprecated,
+                 int,
+                 std::string,
+                 std::string,
+                 << "Line <" << arg1 << "> of file <" << arg2 << ">: "
+                 << "Entry <" << arg3 << "> is deprecated.");
+
+  /**
+   * Exception
+   */
+  DeclException1(ExcEncounteredDeprecatedEntries,
+                 std::string,
+                 << "The following deprecated entries were encountered:\n\n"
+                 << arg1);
+
   /**
    * Exception
    */
@@ -1645,6 +1702,7 @@ public:
     ExcAlreadyAtTopLevel,
     "You can't leave a subsection if you are already at the top level "
     "of the subsection hierarchy.");
+
   /**
    * Exception
    */
@@ -1784,32 +1842,6 @@ private:
    * store indices into this array in order to reference specific actions.
    */
   std::vector<std::function<void(const std::string &)>> actions;
-
-  /**
-   * Return the string that identifies the current path into the property
-   * tree. This is only a path, i.e. it is not terminated by the
-   * path_separator character.
-   *
-   * This function simply calls collate_path_string() with
-   * @p subsection_path as argument
-   */
-  std::string
-  get_current_path() const;
-
-  /**
-   * Given the name of an entry as argument, the function computes a full path
-   * into the parameter tree using the current subsection.
-   */
-  std::string
-  get_current_full_path(const std::string &name) const;
-
-  /**
-   * This function computes a full path into the parameter tree given a path
-   * from the current subsection and the name of an entry.
-   */
-  std::string
-  get_current_full_path(const std::vector<std::string> &sub_path,
-                        const std::string              &name) const;
 
   /**
    * Scan one line of input. <tt>input_filename</tt> and
@@ -2298,7 +2330,7 @@ ParameterHandler::save(Archive &ar, const unsigned int) const
 {
   // Forward to serialization
   // function in the base class.
-  ar &static_cast<const Subscriptor &>(*this);
+  ar &static_cast<const EnableObserverPointer &>(*this);
 
   ar &*entries.get();
 
@@ -2318,7 +2350,7 @@ ParameterHandler::load(Archive &ar, const unsigned int)
 {
   // Forward to serialization
   // function in the base class.
-  ar &static_cast<Subscriptor &>(*this);
+  ar &static_cast<EnableObserverPointer &>(*this);
 
   ar &*entries.get();
 

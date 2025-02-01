@@ -1,17 +1,16 @@
-# ---------------------------------------------------------------------
-#
-# Copyright (C) 2016 - 2022 by the deal.II authors
-#
-# This file is part of the deal.II library.
-#
-# The deal.II library is free software; you can use it, redistribute
-# it, and/or modify it under the terms of the GNU Lesser General
-# Public License as published by the Free Software Foundation; either
-# version 2.1 of the License, or (at your option) any later version.
-# The full text of the license can be found in the file LICENSE.md at
-# the top level directory of deal.II.
-#
-# ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
+##
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2016 - 2024 by the deal.II authors
+##
+## This file is part of the deal.II library.
+##
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
+##
+## ------------------------------------------------------------------------
 
 import unittest
 
@@ -182,6 +181,23 @@ class TestTriangulationWrapper(unittest.TestCase):
                 n_cells = triangulation.n_active_cells()
                 self.assertEqual(n_cells, 175)
 
+    def test_generate_plate_with_hole(self):
+        for dim in self.dim:
+            triangulation = Triangulation(dim[0])
+            triangulation.generate_plate_with_a_hole()
+            n_cells = triangulation.n_active_cells()
+            self.assertEqual(n_cells, 28)
+
+    def test_generate_channel_with_cylinder(self):
+        for dim in self.dim:
+            triangulation = Triangulation(dim[0])
+            triangulation.generate_channel_with_cylinder()
+            n_cells = triangulation.n_active_cells()
+            if (dim[0] == '2D'):
+                self.assertEqual(n_cells, 108)
+            else:
+                self.assertEqual(n_cells, 432)
+
     def test_generate_general_cell(self):
         for dim in self.restricted_dim:
             triangulation = Triangulation(dim[0], dim[1])
@@ -317,6 +333,16 @@ class TestTriangulationWrapper(unittest.TestCase):
             n_cells = triangulation.n_active_cells()
             self.assertEqual(n_cells, n_cells_ref)
 
+    def test_hyper_ball_balanced(self):
+        for dim in self.dim:
+            triangulation = Triangulation(dim[0])
+            triangulation.generate_hyper_ball_balanced()
+            n_cells = triangulation.n_active_cells()
+            if (dim[0] == '2D'):
+                self.assertEqual(n_cells, 12)
+            else:
+                self.assertEqual(n_cells, 32)
+
     def test_hyper_sphere(self):
          triangulation = Triangulation('2D', '3D')
          center = Point([0, 0])
@@ -348,6 +374,35 @@ class TestTriangulationWrapper(unittest.TestCase):
                 center = Point([0., 0., 0.])
                 n_cells_ref = 6
             triangulation.generate_half_hyper_ball(center)
+            n_cells = triangulation.n_active_cells()
+            self.assertEqual(n_cells, n_cells_ref)
+
+    def test_cylinder(self):
+        for dim in self.dim:
+            triangulation = Triangulation(dim[0])
+            if (dim[0] == '2D'):
+                n_cells_ref = 1
+            else:
+                n_cells_ref = 10
+            triangulation.generate_cylinder()
+            n_cells = triangulation.n_active_cells()
+            self.assertEqual(n_cells, n_cells_ref)
+
+    def test_subdivided_cylinder(self):
+        triangulation = Triangulation('3D')
+        n_cells_ref = 5
+        triangulation.generate_subdivided_cylinder(2)
+        n_cells = triangulation.n_active_cells()
+        self.assertEqual(n_cells, n_cells_ref)
+
+    def test_truncated_cone(self):
+        for dim in self.dim:
+            triangulation = Triangulation(dim[0])
+            if (dim[0] == '2D'):
+                n_cells_ref = 1
+            else:
+                n_cells_ref = 5
+            triangulation.generate_truncated_cone()
             n_cells = triangulation.n_active_cells()
             self.assertEqual(n_cells, n_cells_ref)
 

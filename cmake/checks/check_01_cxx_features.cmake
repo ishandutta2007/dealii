@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # Check for various C++ language features
@@ -20,6 +19,7 @@
 #
 #   DEAL_II_HAVE_CXX17
 #   DEAL_II_HAVE_CXX20
+#   DEAL_II_HAVE_CXX23
 #
 #   DEAL_II_HAVE_FP_EXCEPTIONS
 #   DEAL_II_HAVE_COMPLEX_OPERATOR_OVERLOADS
@@ -62,6 +62,7 @@ macro(_test_cxx23_support)
   # Strictly speaking "202100L" indicates support for a preliminary version
   # of the C++23 standard (which will have "202302L" when finalized). gcc-13
   # exports this version number when configured with C++23 support.
+  add_flags(CMAKE_REQUIRED_FLAGS "-Werror")
   CHECK_CXX_SOURCE_COMPILES(
     "
     #include <version>
@@ -74,9 +75,12 @@ macro(_test_cxx23_support)
       static void operator()() {}
     };
 
-    int main() {}
+    int main() {
+      [[assume(2 > 1)]];
+    }
     "
     DEAL_II_HAVE_CXX23_FEATURES)
+  reset_cmake_required()
 
   if(DEAL_II_HAVE_CXX23_FEATURES)
     message(STATUS "C++23 support is enabled.")
@@ -462,8 +466,17 @@ endif()
 
 
 #
-# Check whether the standard library provides operator* overloads for mixed
-# floating point multiplication of complex and real valued numbers.
+# Check whether the standard library provides operator* overloads for
+# mixed floating point multiplication of complex and real valued
+# numbers. The C++ standard does not say that such overloads should
+# exist, and so they shouldn't. In other words, a standards compliant
+# compiler will fail this check.
+#
+# In practice, the absence of these overloads makes it quite difficult
+# to write mixed-precision linear algebra functions. To make this less
+# of a pain, we declare such overloads ourselves (in namespace dealii)
+# unless the compiler already has them (which, as mentioned above, it
+# shouldn't).
 #
 # - Matthias Maier, 2015
 #
@@ -556,7 +569,6 @@ CHECK_CXX_SOURCE_COMPILES(
   #include <cmath>
   using std::cyl_bessel_j;
   using std::cyl_bessel_jf;
-  using std::cyl_bessel_jl;
   int main()
   {
   }
@@ -574,7 +586,6 @@ CHECK_CXX_SOURCE_COMPILES(
   #include <cmath>
   using std::legendre;
   using std::legendref;
-  using std::legendrel;
   int main()
   {
   }

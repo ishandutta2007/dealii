@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2022 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 //
 // Description:
@@ -502,11 +501,9 @@ LaplaceProblem<dim>::setup_transfer()
   std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>> partitioners(
     dof_handler.get_triangulation().n_global_levels());
   for (unsigned int level = 0; level < partitioners.size(); ++level)
-    {
-      LinearAlgebra::distributed::Vector<float> vec;
-      mg_matrices[level].initialize_dof_vector(vec);
-      partitioners[level] = vec.get_partitioner();
-    }
+    partitioners[level] =
+      mg_matrices[level].get_matrix_free()->get_dof_info().vector_partitioner;
+
   mg_transfer.build(dof_handler, partitioners);
 }
 

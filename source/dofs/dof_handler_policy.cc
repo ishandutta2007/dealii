@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2010 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/geometry_info.h>
@@ -125,7 +124,7 @@ namespace internal
                     }
 
                   default:
-                    Assert(false, ExcNotImplemented());
+                    DEAL_II_NOT_IMPLEMENTED();
                 }
 
 #ifdef DEBUG
@@ -2890,7 +2889,7 @@ namespace internal
         Assert(tr != nullptr, ExcInternalError());
 
         const unsigned int n_procs =
-          Utilities::MPI::n_mpi_processes(tr->get_communicator());
+          Utilities::MPI::n_mpi_processes(tr->get_mpi_communicator());
 
         // If an underlying shared::Tria allows artificial cells, we need to
         // restore the true cell owners temporarily.
@@ -2995,7 +2994,7 @@ namespace internal
           unsigned int end_index   = 0;
           while (start_index < n_dofs)
             {
-              while ((end_index) < n_dofs &&
+              while ((end_index < n_dofs) &&
                      (subdomain_association[end_index] ==
                       subdomain_association[start_index]))
                 ++end_index;
@@ -3041,7 +3040,7 @@ namespace internal
                       "is set in the constructor."));
 
         const unsigned int n_procs =
-          Utilities::MPI::n_mpi_processes(tr->get_communicator());
+          Utilities::MPI::n_mpi_processes(tr->get_mpi_communicator());
         const unsigned int n_levels = tr->n_global_levels();
 
         std::vector<NumberCache> number_caches;
@@ -3225,7 +3224,7 @@ namespace internal
       {
 #ifndef DEAL_II_WITH_MPI
         (void)new_numbers;
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return NumberCache();
 #else
         // Similar to distribute_dofs() we need to have a special treatment in
@@ -3253,7 +3252,7 @@ namespace internal
         Utilities::MPI::internal::all_reduce<bool>(
           MPI_LAND,
           ArrayView<const bool>(&uses_sequential_numbering, 1),
-          tr->get_communicator(),
+          tr->get_mpi_communicator(),
           ArrayView<bool>(&all_use_sequential_numbering, 1));
         if (all_use_sequential_numbering)
           {
@@ -3265,10 +3264,11 @@ namespace internal
                      this->dof_handler->locally_owned_dofs().n_elements(),
                    ExcInternalError());
             const unsigned int n_cpu =
-              Utilities::MPI::n_mpi_processes(tr->get_communicator());
+              Utilities::MPI::n_mpi_processes(tr->get_mpi_communicator());
             std::vector<types::global_dof_index> gathered_new_numbers(
               this->dof_handler->n_dofs(), 0);
-            Assert(Utilities::MPI::this_mpi_process(tr->get_communicator()) ==
+            Assert(Utilities::MPI::this_mpi_process(
+                     tr->get_mpi_communicator()) ==
                      this->dof_handler->get_triangulation()
                        .locally_owned_subdomain(),
                    ExcInternalError());
@@ -3291,7 +3291,7 @@ namespace internal
                                        rcounts.data(),
                                        1,
                                        MPI_INT,
-                                       tr->get_communicator());
+                                       tr->get_mpi_communicator());
               AssertThrowMPI(ierr);
 
               // compute the displacements (relative to recvbuf)
@@ -3305,7 +3305,7 @@ namespace internal
               Assert(new_numbers_copy.size() ==
                        static_cast<unsigned int>(
                          rcounts[Utilities::MPI::this_mpi_process(
-                           tr->get_communicator())]),
+                           tr->get_mpi_communicator())]),
                      ExcInternalError());
               ierr = MPI_Allgatherv(new_numbers_copy.data(),
                                     new_numbers_copy.size(),
@@ -3314,7 +3314,7 @@ namespace internal
                                     rcounts.data(),
                                     displacements.data(),
                                     DEAL_II_DOF_INDEX_MPI_TYPE,
-                                    tr->get_communicator());
+                                    tr->get_mpi_communicator());
               AssertThrowMPI(ierr);
             }
 
@@ -3328,7 +3328,7 @@ namespace internal
             std::vector<unsigned int> flag_2(this->dof_handler->n_dofs(), 0);
             std::vector<IndexSet>     locally_owned_dofs_per_processor =
               Utilities::MPI::all_gather(
-                tr->get_communicator(),
+                tr->get_mpi_communicator(),
                 this->dof_handler->locally_owned_dofs());
             for (unsigned int i = 0; i < n_cpu; ++i)
               {
@@ -3386,7 +3386,7 @@ namespace internal
         const std::vector<types::global_dof_index> & /*new_numbers*/) const
       {
         // multigrid is not currently implemented for shared triangulations
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
 
         return {};
       }
@@ -3503,7 +3503,7 @@ namespace internal
         {
 #  ifndef DEAL_II_WITH_MPI
           (void)dof_handler;
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
 #  else
 
           // define functions that pack data on cells that are ghost cells
@@ -3605,7 +3605,7 @@ namespace internal
       ParallelDistributed<dim, spacedim>::distribute_dofs() const
       {
 #ifndef DEAL_II_WITH_MPI
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return NumberCache();
 #else
 
@@ -3694,14 +3694,10 @@ namespace internal
 
         // --------- Phase 4: shift indices so that each processor has a unique
         //                    range of indices
-        dealii::types::global_dof_index my_shift = 0;
-        const int                       ierr = MPI_Exscan(&n_locally_owned_dofs,
-                                    &my_shift,
-                                    1,
-                                    DEAL_II_DOF_INDEX_MPI_TYPE,
-                                    MPI_SUM,
-                                    triangulation->get_communicator());
-        AssertThrowMPI(ierr);
+        const auto [my_shift, n_global_dofs] =
+          Utilities::MPI::partial_and_total_sum(
+            n_locally_owned_dofs, triangulation->get_mpi_communicator());
+
 
         // make dof indices globally consecutive
         Implementation::enumerate_dof_indices_for_renumbering(
@@ -3714,11 +3710,6 @@ namespace internal
                                       IndexSet(0),
                                       *dof_handler,
                                       /*check_validity=*/false);
-
-        // now a little bit of housekeeping
-        const dealii::types::global_dof_index n_global_dofs =
-          Utilities::MPI::sum(n_locally_owned_dofs,
-                              triangulation->get_communicator());
 
         NumberCache number_cache;
         number_cache.n_global_dofs        = n_global_dofs;
@@ -3822,7 +3813,7 @@ namespace internal
       ParallelDistributed<dim, spacedim>::distribute_mg_dofs() const
       {
 #ifndef DEAL_II_WITH_MPI
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return std::vector<NumberCache>();
 #else
 
@@ -3899,33 +3890,17 @@ namespace internal
 
             //* 3. communicate local dofcount and shift ids to make
             // them unique
-            dealii::types::global_dof_index my_shift = 0;
-            int ierr = MPI_Exscan(&level_number_cache.n_locally_owned_dofs,
-                                  &my_shift,
-                                  1,
-                                  DEAL_II_DOF_INDEX_MPI_TYPE,
-                                  MPI_SUM,
-                                  triangulation->get_communicator());
-            AssertThrowMPI(ierr);
-
-            // The last processor knows about the total number of dofs, so we
-            // can use a cheaper broadcast rather than an MPI_Allreduce via
-            // MPI::sum().
-            level_number_cache.n_global_dofs =
-              my_shift + level_number_cache.n_locally_owned_dofs;
-            ierr = MPI_Bcast(&level_number_cache.n_global_dofs,
-                             1,
-                             DEAL_II_DOF_INDEX_MPI_TYPE,
-                             Utilities::MPI::n_mpi_processes(
-                               triangulation->get_communicator()) -
-                               1,
-                             triangulation->get_communicator());
-            AssertThrowMPI(ierr);
+            const auto [my_shift, n_global_dofs] =
+              Utilities::MPI::partial_and_total_sum(
+                level_number_cache.n_locally_owned_dofs,
+                triangulation->get_mpi_communicator());
+            level_number_cache.n_global_dofs = n_global_dofs;
 
             // assign appropriate indices
+            types::global_dof_index next_free_index = my_shift;
             for (types::global_dof_index &index : renumbering)
               if (index == enumeration_dof_index)
-                index = my_shift++;
+                index = next_free_index++;
 
             // now re-enumerate all dofs to this shifted and condensed
             // numbering form.  we renumber some dofs as invalid, so
@@ -3943,7 +3918,8 @@ namespace internal
             level_number_cache.locally_owned_dofs =
               IndexSet(level_number_cache.n_global_dofs);
             level_number_cache.locally_owned_dofs.add_range(
-              my_shift - level_number_cache.n_locally_owned_dofs, my_shift);
+              next_free_index - level_number_cache.n_locally_owned_dofs,
+              next_free_index);
             level_number_cache.locally_owned_dofs.compress();
 
             number_caches.emplace_back(level_number_cache);
@@ -4019,7 +3995,7 @@ namespace internal
                ExcInternalError());
 
 #ifndef DEAL_II_WITH_MPI
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return NumberCache();
 #else
 
@@ -4153,7 +4129,7 @@ namespace internal
         (void)level;
         (void)new_numbers;
 
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return NumberCache();
 #else
 

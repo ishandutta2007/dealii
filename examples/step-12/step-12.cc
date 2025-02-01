@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2022 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2009 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Guido Kanschat, Texas A&M University, 2009
  *          Timo Heister, Clemson University, 2019
@@ -101,7 +100,7 @@ namespace Step12
 
     for (unsigned int i = 0; i < values.size(); ++i)
       {
-        if (points[i](0) < 0.5)
+        if (points[i][0] < 0.5)
           values[i] = 1.;
         else
           values[i] = 0.;
@@ -482,7 +481,7 @@ namespace Step12
     SolverControl solver_control(1000, 1e-6 * right_hand_side.l2_norm());
 
     SolverGMRES<Vector<double>>::AdditionalData additional_data;
-    additional_data.max_n_tmp_vectors = 100;
+    additional_data.max_basis_size = 100;
     SolverGMRES<Vector<double>> solver(solver_control, additional_data);
 
     // Here we create the preconditioner,

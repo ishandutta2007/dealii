@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2019 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -39,12 +38,7 @@ namespace HDF5
       check_exception(const std::string &type, const std::string &name)
       {
 #  ifdef DEAL_II_WITH_MPI
-#    if __cpp_lib_uncaught_exceptions >= 201411
-        // std::uncaught_exception() is deprecated in c++17
-        if (std::uncaught_exceptions() != 0)
-#    else
-        if (std::uncaught_exception() == true)
-#    endif
+        if (std::uncaught_exceptions() > 0)
           {
             std::cerr
               << "---------------------------------------------------------\n"
@@ -218,28 +212,28 @@ namespace HDF5
     switch (io_mode)
       {
         case (H5D_MPIO_NO_COLLECTIVE):
-          return std::string("H5D_MPIO_NO_COLLECTIVE");
+          return "H5D_MPIO_NO_COLLECTIVE";
           break;
         case (H5D_MPIO_CHUNK_INDEPENDENT):
-          return std::string("H5D_MPIO_CHUNK_INDEPENDENT");
+          return "H5D_MPIO_CHUNK_INDEPENDENT";
           break;
         case (H5D_MPIO_CHUNK_COLLECTIVE):
-          return std::string("H5D_MPIO_CHUNK_COLLECTIVE");
+          return "H5D_MPIO_CHUNK_COLLECTIVE";
           break;
         case (H5D_MPIO_CHUNK_MIXED):
-          return std::string("H5D_MPIO_CHUNK_MIXED");
+          return "H5D_MPIO_CHUNK_MIXED";
           break;
         case (H5D_MPIO_CONTIGUOUS_COLLECTIVE):
-          return std::string("H5D_MPIO_CONTIGUOUS_COLLECTIVE");
+          return "H5D_MPIO_CONTIGUOUS_COLLECTIVE";
           break;
         default:
-          Assert(false, ExcInternalError());
-          return std::string("Internal error");
+          DEAL_II_ASSERT_UNREACHABLE();
+          return "Internal error";
           break;
       }
     // The function should not reach this line.
-    Assert(false, ExcInternalError());
-    return std::string("Internal error");
+    DEAL_II_ASSERT_UNREACHABLE();
+    return "Internal error";
   }
 
 
@@ -356,7 +350,7 @@ namespace HDF5
           Assert(*hdf5_reference >= 0, ExcMessage("Error at H5Gcreate2"));
           break;
         default:
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
           break;
       }
   }
@@ -467,7 +461,7 @@ namespace HDF5
           Assert(*hdf5_reference >= 0, ExcMessage("Error at H5Fcreate"));
           break;
         default:
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
           break;
       }
 

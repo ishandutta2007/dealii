@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2008 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_trilinos_precondition_h
 #define dealii_trilinos_precondition_h
@@ -21,7 +20,7 @@
 
 #ifdef DEAL_II_WITH_TRILINOS
 
-#  include <deal.II/base/subscriptor.h>
+#  include <deal.II/base/enable_observer_pointer.h>
 
 #  include <deal.II/lac/la_parallel_vector.h>
 #  include <deal.II/lac/trilinos_vector.h>
@@ -74,7 +73,7 @@ namespace TrilinosWrappers
    * @ingroup TrilinosWrappers
    * @ingroup Preconditioners
    */
-  class PreconditionBase : public Subscriptor
+  class PreconditionBase : public EnableObserverPointer
   {
   public:
     /**
@@ -277,9 +276,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the Jacobi preconditioner is used on
-       * matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we would divide by
-       * zero.
+       * matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we would
+       * divide by zero.
        */
       double min_diagonal;
 
@@ -339,8 +338,8 @@ namespace TrilinosWrappers
      * setting the parameter <tt>min_diagonal</tt> to a small nonzero value
      * the SOR will work on a matrix that is not too far away from the one we
      * want to treat. Finally, <tt>overlap</tt> governs the overlap of the
-     * partitions when the preconditioner runs in parallel, forming a so-
-     * called additive Schwarz preconditioner.
+     * partitions when the preconditioner runs in parallel, forming a
+     * so-called additive Schwarz preconditioner.
      */
     struct AdditionalData
     {
@@ -364,9 +363,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the SSOR preconditioner is used on
-       * matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we divide by the
-       * diagonal element.
+       * matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we divide by
+       * the diagonal element.
        */
       double min_diagonal;
 
@@ -433,8 +432,8 @@ namespace TrilinosWrappers
      * setting the parameter <tt>min_diagonal</tt> to a small nonzero value
      * the SOR will work on a matrix that is not too far away from the one we
      * want to treat. Finally, <tt>overlap</tt> governs the overlap of the
-     * partitions when the preconditioner runs in parallel, forming a so-
-     * called additive Schwarz preconditioner.
+     * partitions when the preconditioner runs in parallel, forming a
+     * so-called additive Schwarz preconditioner.
      */
     struct AdditionalData
     {
@@ -458,9 +457,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the SOR preconditioner is used on
-       * matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we divide by the
-       * diagonal element.
+       * matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we divide by
+       * the diagonal element.
        */
       double min_diagonal;
 
@@ -559,9 +558,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the block Jacobi preconditioner is used
-       * on matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we divide by the
-       * diagonal element.
+       * on matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we divide by
+       * the diagonal element.
        */
       double min_diagonal;
 
@@ -585,8 +584,8 @@ namespace TrilinosWrappers
 
   /**
    * A wrapper class for a block SSOR preconditioner for Trilinos matrices. As
-   * opposed to PreconditionSSOR where each row is treated separately (point-
-   * wise), this scheme collects block of a given size and inverts a full
+   * opposed to PreconditionSSOR where each row is treated separately
+   * (point-wise), this scheme collects block of a given size and inverts a full
    * matrix for all these rows simultaneously. Trilinos allows to select
    * several strategies for selecting which rows form a block, including
    * "linear" (i.e., divide the local range of the matrix in slices of the
@@ -663,9 +662,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the SSOR preconditioner is used on
-       * matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we divide by the
-       * diagonal element.
+       * matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we divide by
+       * the diagonal element.
        */
       double min_diagonal;
 
@@ -774,9 +773,9 @@ namespace TrilinosWrappers
       /**
        * This specifies the minimum value the diagonal elements should have.
        * This might be necessary when the SOR preconditioner is used on
-       * matrices with zero diagonal elements. In that case, a straight-
-       * forward application would not be possible since we divide by the
-       * diagonal element.
+       * matrices with zero diagonal elements. In that case, a
+       * straight-forward application would not be possible since we divide by
+       * the diagonal element.
        */
       double min_diagonal;
 
@@ -1037,8 +1036,8 @@ namespace TrilinosWrappers
    * lets the user specify which elements should be dropped (i.e., should not
    * be part of the incomplete decomposition). Trilinos calculates first the
    * complete factorization for one row, and then skips those elements that
-   * are lower than the threshold. This is the main difference to the non-
-   * thresholded ILU preconditioner, where the parameter <tt>ilut_fill</tt>
+   * are lower than the threshold. This is the main difference to the
+   * non-thresholded ILU preconditioner, where the parameter <tt>ilut_fill</tt>
    * governs the incomplete factorization structure. This parameter is
    * available here as well, but provides only some extra information here.
    *
@@ -1066,8 +1065,8 @@ namespace TrilinosWrappers
   public:
     /**
      * Standardized data struct to pipe additional parameters to the
-     * preconditioner. The Trilinos ILU-T decomposition allows for some fill-
-     * in, so it actually is a threshold incomplete LU factorization. The
+     * preconditioner. The Trilinos ILU-T decomposition allows for some
+     * fill-in, so it actually is a threshold incomplete LU factorization. The
      * amount of fill-in, and hence, the amount of memory used by this
      * preconditioner, is controlled by the parameters <tt>ilut_drop</tt> and
      * <tt>ilut_fill</tt>, which specifies a threshold about which values
@@ -1310,9 +1309,9 @@ namespace TrilinosWrappers
    * processors.
    *
    * For proper functionality of this class we recommend using Trilinos v9.0
-   * and higher. Older versions may have problems with generating the coarse-
-   * matrix structure when using matrices with many nonzero entries per row
-   * (i.e., matrices stemming from higher order finite element
+   * and higher. Older versions may have problems with generating the
+   * coarse-matrix structure when using matrices with many nonzero entries per
+   * row (i.e., matrices stemming from higher order finite element
    * discretizations).
    *
    * @ingroup TrilinosWrappers
@@ -1439,8 +1438,8 @@ namespace TrilinosWrappers
       /**
        * Determines whether the AMG preconditioner should be optimized for
        * elliptic problems (ML option smoothed aggregation SA, using a
-       * Chebyshev smoother) or for non-elliptic problems (ML option non-
-       * symmetric smoothed aggregation NSSA, smoother is SSOR with
+       * Chebyshev smoother) or for non-elliptic problems (ML option
+       * non-symmetric smoothed aggregation NSSA, smoother is SSOR with
        * underrelaxation).
        */
       bool elliptic;
@@ -1499,6 +1498,15 @@ namespace TrilinosWrappers
        * with the function DoFTools::extract_constant_modes.
        */
       std::vector<std::vector<bool>> constant_modes;
+
+      /**
+       * Same as above, but with values instead of Booleans. This
+       * is useful if you want to specify rotational modes
+       * in addition to the translational modes. See also:
+       * DoFTools::extract_rigid_body_modes
+       * and DoFTools::extract_level_rigid_body_modes.
+       */
+      std::vector<std::vector<double>> constant_modes_values;
 
       /**
        * Determines how many sweeps of the smoother should be performed. When
@@ -1733,8 +1741,8 @@ namespace TrilinosWrappers
       /**
        * Determines whether the AMG preconditioner should be optimized for
        * elliptic problems (MueLu option smoothed aggregation SA, using a
-       * Chebyshev smoother) or for non-elliptic problems (MueLu option non-
-       * symmetric smoothed aggregation NSSA, smoother is SSOR with
+       * Chebyshev smoother) or for non-elliptic problems (MueLu option
+       * non-symmetric smoothed aggregation NSSA, smoother is SSOR with
        * underrelaxation).
        */
       bool elliptic;

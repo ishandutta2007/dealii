@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2005 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_qprojector_h
 #define dealii_qprojector_h
@@ -299,10 +298,16 @@ public:
      * course is only allowed if <tt>dim>=2</tt>, and the face orientation,
      * flip and rotation are ignored if the space dimension equals 2.
      *
-     * The last argument denotes the number of quadrature points the lower-
-     * dimensional face quadrature formula (the one that has been projected
-     * onto the faces) has.
+     * The last argument denotes the number of quadrature points the
+     * lower-dimensional face quadrature formula (the one that has been
+     * projected onto the faces) has.
+     *
+     * @deprecated Use the version of this function which takes a
+     * combined_orientation argument instead.
      */
+    DEAL_II_DEPRECATED_WITH_COMMENT(
+      "Use the version of this function which takes a combined_orientation "
+      "argument instead.")
     static DataSetDescriptor
     face(const ReferenceCell &reference_cell,
          const unsigned int   face_no,
@@ -312,9 +317,32 @@ public:
          const unsigned int   n_quadrature_points);
 
     /**
-     * Like the above function but taking a quadrature collection, enabling
-     * that each face might have different number of quadrature points.
+     * Static function to generate an offset object for a given face of a cell
+     * with the given combined face orientation. This function of course is only
+     * allowed if <tt>dim>=2</tt>, and @p combined_orientation is ignored if the
+     * space dimension equals 2.
+     *
+     * @p n_quadrature_points is the number of quadrature points the
+     * lower-dimensional face quadrature formula (the one that has been
+     * projected onto the faces) has.
      */
+    static DataSetDescriptor
+    face(const ReferenceCell               &reference_cell,
+         const unsigned int                 face_no,
+         const types::geometric_orientation combined_orientation,
+         const unsigned int                 n_quadrature_points);
+
+    /**
+     * Compute an offset object for the given face number and orientation,
+     * taking into account the possibility of different quadrature rules being
+     * used on each face.
+     *
+     * @deprecated Use the version of this function which takes a
+     * combined_orientation argument instead.
+     */
+    DEAL_II_DEPRECATED_WITH_COMMENT(
+      "Use the version of this function which takes a combined_orientation "
+      "argument instead.")
     static DataSetDescriptor
     face(const ReferenceCell            &reference_cell,
          const unsigned int              face_no,
@@ -322,6 +350,18 @@ public:
          const bool                      face_flip,
          const bool                      face_rotation,
          const hp::QCollection<dim - 1> &quadrature);
+
+    /**
+     * Compute an offset object for the given face number and orientation,
+     * taking into account the possibility of different quadrature rules being
+     * used on each face.
+     *
+     */
+    static DataSetDescriptor
+    face(const ReferenceCell               &reference_cell,
+         const unsigned int                 face_no,
+         const types::geometric_orientation combined_orientation,
+         const hp::QCollection<dim - 1>    &quadrature);
 
     /**
      * Static function to generate an offset object for a given subface of a
@@ -334,7 +374,13 @@ public:
      * projected onto the faces) has.
      *
      * Through the last argument anisotropic refinement can be respected.
+     *
+     * @deprecated Use the version of this function which takes a
+     * combined_orientation argument instead.
      */
+    DEAL_II_DEPRECATED_WITH_COMMENT(
+      "Use the version of this function which takes a combined_orientation "
+      "argument instead.")
     static DataSetDescriptor
     subface(const ReferenceCell             &reference_cell,
             const unsigned int               face_no,
@@ -344,6 +390,27 @@ public:
             const bool                       face_rotation,
             const unsigned int               n_quadrature_points,
             const internal::SubfaceCase<dim> ref_case =
+              internal::SubfaceCase<dim>::case_isotropic);
+
+    /**
+     * Static function to generate an offset object for a given subface of a
+     * cell with the given combined face orientation. This function of course is
+     * only allowed if <tt>dim>=2</tt>, and the orientation is ignored if the
+     * space dimension equals 2.
+     *
+     * @p n_quadrature_points denotes the number of quadrature points the
+     * lower-dimensional face quadrature formula (the one that has been
+     * projected onto the faces) has.
+     *
+     * Through the last argument anisotropic refinement can be respected.
+     */
+    static DataSetDescriptor
+    subface(const ReferenceCell               &reference_cell,
+            const unsigned int                 face_no,
+            const unsigned int                 subface_no,
+            const types::geometric_orientation combined_orientation,
+            const unsigned int                 n_quadrature_points,
+            const internal::SubfaceCase<dim>   ref_case =
               internal::SubfaceCase<dim>::case_isotropic);
 
     /**

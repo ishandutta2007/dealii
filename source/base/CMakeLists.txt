@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # All source/base files are sufficiently small that they may be added to the
@@ -24,6 +23,7 @@ set(_unity_include_src
   conditional_ostream.cc
   convergence_table.cc
   discrete_time.cc
+  enable_observer_pointer.cc
   event.cc
   exceptions.cc
   flow_function.cc
@@ -42,13 +42,13 @@ set(_unity_include_src
   geometric_utilities.cc
   graph_coloring.cc
   incremental_function.cc
+  init_finalize.cc
   index_set.cc
   job_identifier.cc
   logstream.cc
   hdf5.cc
   kokkos.cc
   mpi.cc
-  mpi_compute_index_owner_internal.cc
   mpi_noncontiguous_partitioner.cc
   mpi_remote_point_evaluation.cc
   mu_parser_internal.cc
@@ -88,7 +88,6 @@ set(_unity_include_src
   quadrature_lib.cc
   quadrature_selector.cc
   scalar_polynomials_base.cc
-  subscriptor.cc
   symbolic_function.cc
   table_handler.cc
   tensor.cc
@@ -109,14 +108,6 @@ set(_separate_src
   data_out_base.cc
   symmetric_tensor.cc
   )
-
-# Add CUDA wrapper files
-if(DEAL_II_WITH_CUDA)
-  set(_separate_src
-    ${_separate_src}
-    cuda.cc
-  )
-endif()
 
 # determined by profiling
 set(_n_includes_per_unity_file 29)

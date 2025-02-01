@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2021 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2023 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  */
 
 // A variation of step-77 that uses PETSc's SNES library as a
@@ -67,7 +66,6 @@ namespace Step77
 {
   // Before writing the main class to solve the problem, we define
   // shortcuts for the types we are going to use within this tutorial.
-  using namespace dealii;
   using VectorType         = PETScWrappers::MPI::Vector;
   using MatrixType         = PETScWrappers::MPI::SparseMatrix;
   using PreconditionerType = PETScWrappers::PreconditionLU;
@@ -325,7 +323,7 @@ namespace Step77
 
   // The following function is similar to that in step-77,
   // except that it supports parallel assembly.
-  // The Jacobian is assembled using homogenous boundary conditions
+  // The Jacobian is assembled using homogeneous boundary conditions
   // since we always solve for the update step.
   // Here we don't need to reevaluate the `locally_relevant_solution`
   // vector since SNES guaranties that the Jacobian callback is called
@@ -465,7 +463,7 @@ namespace Step77
 
   // Again, this is basically a verbatim copy of the function in step-77.
   // The only differences are in how we setup the nonlinear solver and in
-  // the way we handle non-homogenous boundary conditions.
+  // the way we handle non-homogeneous boundary conditions.
   template <int dim>
   void
   MinimalSurfaceProblem<dim>::run()
@@ -588,7 +586,7 @@ namespace Step77
           // We are now set up to solve the nonlinear system
           nonlinear_solver.solve(current_solution);
 
-          // Differently from step-77, we apply non-homogenous boundary
+          // Differently from step-77, we apply non-homogeneous boundary
           // conditions only once, after the algebraic solve is done.
           // Note that this call is only needed since this example uses hanging
           // nodes constraints.

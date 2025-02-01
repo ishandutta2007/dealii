@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1998 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/geometry_info.h>
 #include <deal.II/base/polynomial.h>
@@ -127,8 +126,8 @@ namespace internal
       std::vector<long double> w(q);
 
       const long double factor =
-        std::pow(2., alpha + beta + 1) * gamma(alpha + q) * gamma(beta + q) /
-        ((q - 1) * gamma(q) * gamma(alpha + beta + q + 1));
+        Utilities::pow(2, alpha + beta + 1) * gamma(alpha + q) *
+        gamma(beta + q) / ((q - 1) * gamma(q) * gamma(alpha + beta + q + 1));
       for (unsigned int i = 0; i < q; ++i)
         {
           const long double s =
@@ -217,7 +216,7 @@ namespace internal
             q_points[7] = 0.977520613561287499;
             break;
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             break;
         }
       return q_points;
@@ -319,7 +318,7 @@ namespace internal
             break;
 
           default:
-            Assert(false, dealii::StandardExceptions::ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             break;
         }
       return weights;
@@ -624,7 +623,7 @@ QGaussLog<1>::get_quadrature_points(const unsigned int n)
         break;
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         break;
     }
 
@@ -756,7 +755,7 @@ QGaussLog<1>::get_quadrature_weights(const unsigned int n)
         break;
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         break;
     }
 
@@ -786,9 +785,9 @@ QGaussLogR<1>::QGaussLogR(const unsigned int n,
   // only need n quadrature points. In the most difficult one, we
   // need 2*n points for the first segment, and 2*n points for the
   // second segment.
-  QGaussLog<1> quad1(n, origin[0] != 0);
-  QGaussLog<1> quad2(n);
-  QGauss<1>    quad(n);
+  const QGaussLog<1> quad1(n, origin[0] != 0);
+  const QGaussLog<1> quad2(n);
+  const QGauss<1>    quad(n);
 
   // Check that the origin is inside 0,1
   Assert((fraction >= 0) && (fraction <= 1),
@@ -929,7 +928,7 @@ QGaussOneOverR<2>::QGaussOneOverR(const unsigned int n,
 
   // Start with the gauss quadrature formula on the (u,v) reference
   // element.
-  QGauss<2> gauss(n);
+  const QGauss<2> gauss(n);
 
   Assert(gauss.size() == n * n, ExcInternalError());
 
@@ -1168,22 +1167,19 @@ QTelles<1>::QTelles(const Quadrature<1> &base_quad, const Point<1> &singularity)
   // We need to check if the singularity is at the boundary of the interval.
   if (std::abs(eta_star) <= tol)
     {
-      gamma_bar =
-        std::pow((eta_bar * eta_star + std::abs(eta_star)), 1.0 / 3.0) +
-        std::pow((eta_bar * eta_star - std::abs(eta_star)), 1.0 / 3.0) +
-        eta_bar;
+      gamma_bar = std::cbrt(eta_bar * eta_star + std::abs(eta_star)) +
+                  std::cbrt(eta_bar * eta_star - std::abs(eta_star)) + eta_bar;
     }
   else
     {
-      gamma_bar = (eta_bar * eta_star + std::abs(eta_star)) /
-                    std::abs(eta_bar * eta_star + std::abs(eta_star)) *
-                    std::pow(std::abs(eta_bar * eta_star + std::abs(eta_star)),
-                             1.0 / 3.0) +
-                  (eta_bar * eta_star - std::abs(eta_star)) /
-                    std::abs(eta_bar * eta_star - std::abs(eta_star)) *
-                    std::pow(std::abs(eta_bar * eta_star - std::abs(eta_star)),
-                             1.0 / 3.0) +
-                  eta_bar;
+      gamma_bar =
+        (eta_bar * eta_star + std::abs(eta_star)) /
+          std::abs(eta_bar * eta_star + std::abs(eta_star)) *
+          std::cbrt(std::abs(eta_bar * eta_star + std::abs(eta_star))) +
+        (eta_bar * eta_star - std::abs(eta_star)) /
+          std::abs(eta_bar * eta_star - std::abs(eta_star)) *
+          std::cbrt(std::abs(eta_bar * eta_star - std::abs(eta_star))) +
+        eta_bar;
     }
   for (unsigned int q = 0; q < quadrature_points.size(); ++q)
     {
@@ -1355,13 +1351,13 @@ QGaussRadauChebyshev<1>::QGaussRadauChebyshev(const unsigned int n,
   Assert(n > 0, ExcMessage("Need at least one point for quadrature rules."));
   std::vector<double> points =
     internal::QGaussRadauChebyshev::get_quadrature_points(n, end_point);
-  std::vector<double> weights =
+  std::vector<double> new_weights =
     internal::QGaussRadauChebyshev::get_quadrature_weights(n, end_point);
 
   for (unsigned int i = 0; i < this->size(); ++i)
     {
       this->quadrature_points[i] = Point<1>(points[i]);
-      this->weights[i]           = weights[i];
+      this->weights[i]           = new_weights[i];
     }
 }
 
@@ -1906,7 +1902,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                 }
               break;
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
         break;
       case 2:
@@ -1933,7 +1929,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                 }
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
         break;
       case 3:
@@ -1988,7 +1984,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                 }
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
         break;
       case 4:
@@ -2063,7 +2059,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                 }
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
         break;
       case 5:
@@ -2163,7 +2159,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                 }
               break;
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
         break;
       case 6:
@@ -2254,7 +2250,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
           }
         break;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   Assert(b_point_permutations.size() == b_weights.size(), ExcInternalError());
@@ -2282,7 +2278,7 @@ namespace
   Quadrature<dim>
   setup_qiterated_1D(const Quadrature<dim> &, const unsigned int)
   {
-    Assert(false, ExcInternalError());
+    DEAL_II_ASSERT_UNREACHABLE();
     return Quadrature<dim>();
   }
 
@@ -2345,7 +2341,7 @@ QIteratedSimplex<dim>::QIteratedSimplex(const Quadrature<dim> &base_quad,
           break;
         }
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2357,8 +2353,8 @@ QGaussWedge<dim>::QGaussWedge(const unsigned int n_points)
 {
   AssertDimension(dim, 3);
 
-  QGaussSimplex<2> quad_tri(n_points);
-  QGauss<1>        quad_line(n_points);
+  const QGaussSimplex<2> quad_tri(n_points);
+  const QGauss<1>        quad_line(n_points);
 
   for (unsigned int i = 0; i < quad_line.size(); ++i)
     for (unsigned int j = 0; j < quad_tri.size(); ++j)

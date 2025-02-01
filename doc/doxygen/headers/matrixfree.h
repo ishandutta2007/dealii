@@ -1,23 +1,22 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2018 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 /**
  * @defgroup matrixfree Matrix-free infrastructure
  *
- * This module describes the matrix-free infrastructure in deal.II.
+ * This group describes the matrix-free infrastructure in deal.II.
  * An outline of how the primary groups of classes in deal.II interact with the
  * matrix-free infrastructure is given by the following clickable graph,
  * with a more detailed description below:
@@ -43,7 +42,7 @@ digraph G
             color="gray", fontcolor="gray", fillcolor="white", style="filled"];
   fevalues [label="FEEvaluation", fillcolor="deepskyblue"];
   mf       [label="MatrixFree loops", fillcolor="deepskyblue"];
-  cuda     [label="CUDA",     URL="\ref CUDAWrappers", fontname="FreeSans",fontsize=12,
+  portable     [label="Portable",     URL="\ref Portable", fontname="FreeSans",fontsize=12,
             height=0.2,width=0.4,
             color="gray", fontcolor="gray", fillcolor="white", style="filled"];
   tbb      [label="TBB", fontname="FreeSans",fontsize=12,
@@ -52,8 +51,8 @@ digraph G
 {rank=same
   simd -> fevalues        [dir="none", color="transparent"];
   fevalues -> mf          [dir="none", color="transparent"];
-  mf -> cuda              [dir="none", color="transparent"];
-  cuda -> tbb             [dir="none", color="transparent"];
+  mf -> portable              [dir="none", color="transparent"];
+  portable -> tbb             [dir="none", color="transparent"];
 }
   subgraph sol {
     rank="same";

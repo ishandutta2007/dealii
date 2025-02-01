@@ -1,19 +1,19 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2012 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
-#include <deal.II/base/mpi_compute_index_owner_internal.h>
+#include <deal.II/base/memory_consumption.h>
+#include <deal.II/base/mpi.h>
 #include <deal.II/base/partitioner.h>
 #include <deal.II/base/partitioner.templates.h>
 
@@ -263,26 +263,10 @@ namespace Utilities
           local_range_data.second = my_shift + old_locally_owned_size;
         }
 
-      std::vector<unsigned int> owning_ranks_of_ghosts(
-        ghost_indices_data.n_elements());
+      const auto [owning_ranks_of_ghosts, import_data] =
+        Utilities::MPI::compute_index_owner_and_requesters(
+          locally_owned_range_data, ghost_indices_data, communicator);
 
-      // set up dictionary
-      internal::ComputeIndexOwner::ConsensusAlgorithmsPayload process(
-        locally_owned_range_data,
-        ghost_indices_data,
-        communicator,
-        owning_ranks_of_ghosts,
-        /* track origins of ghosts*/ true);
-
-      // read dictionary by communicating with the process who owns the index
-      // in the static partition (i.e. in the dictionary). This process
-      // returns the actual owner of the index.
-      ConsensusAlgorithms::Selector<
-        std::vector<
-          std::pair<types::global_dof_index, types::global_dof_index>>,
-        std::vector<unsigned int>>
-        consensus_algorithm;
-      consensus_algorithm.run(process, communicator);
 
       {
         ghost_targets_data = {};
@@ -303,9 +287,6 @@ namespace Utilities
               }
           }
       }
-
-      // find how much the individual processes that want import from me
-      std::map<unsigned int, IndexSet> import_data = process.get_requesters();
 
       // count import requests and set up the compressed indices
       n_import_indices_data = 0;

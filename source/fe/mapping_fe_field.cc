@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2015 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/array_view.h>
 #include <deal.II/base/memory_consumption.h>
@@ -60,7 +59,8 @@ template <int dim, int spacedim, typename VectorType>
 MappingFEField<dim, spacedim, VectorType>::InternalData::InternalData(
   const FiniteElement<dim, spacedim> &fe,
   const ComponentMask                &mask)
-  : unit_tangentials()
+  : fe(&fe)
+  , unit_tangentials()
   , n_shape_functions(fe.n_dofs_per_cell())
   , mask(mask)
   , local_dof_indices(fe.n_dofs_per_cell())
@@ -70,11 +70,91 @@ MappingFEField<dim, spacedim, VectorType>::InternalData::InternalData(
 
 
 template <int dim, int spacedim, typename VectorType>
+void
+MappingFEField<dim, spacedim, VectorType>::InternalData::reinit(
+  const UpdateFlags      update_flags,
+  const Quadrature<dim> &quadrature)
+{
+  // store the flags in the internal data object so we can access them
+  // in fill_fe_*_values(). use the transitive hull of the required
+  // flags
+  this->update_each = update_flags;
+
+  const unsigned int             n_q_points = quadrature.size();
+  const std::vector<Point<dim>> &points     = quadrature.get_points();
+
+  // see if we need the (transformation) shape function values
+  // and/or gradients and resize the necessary arrays
+  if (update_flags & update_quadrature_points)
+    {
+      shape_values.resize(n_shape_functions * n_q_points);
+      for (unsigned int point = 0; point < n_q_points; ++point)
+        for (unsigned int i = 0; i < n_shape_functions; ++i)
+          shape(point, i) = fe->shape_value(i, points[point]);
+    }
+
+  if (update_flags &
+      (update_covariant_transformation | update_contravariant_transformation |
+       update_JxW_values | update_boundary_forms | update_normal_vectors |
+       update_jacobians | update_jacobian_grads | update_inverse_jacobians))
+    {
+      shape_derivatives.resize(n_shape_functions * n_q_points);
+      for (unsigned int point = 0; point < n_q_points; ++point)
+        for (unsigned int i = 0; i < n_shape_functions; ++i)
+          derivative(point, i) = fe->shape_grad(i, points[point]);
+    }
+
+  if (update_flags & update_covariant_transformation)
+    covariant.resize(n_q_points);
+
+  if (update_flags & update_contravariant_transformation)
+    contravariant.resize(n_q_points);
+
+  if (update_flags & update_volume_elements)
+    volume_elements.resize(n_q_points);
+
+  if (update_flags &
+      (update_jacobian_grads | update_jacobian_pushed_forward_grads))
+    {
+      shape_second_derivatives.resize(n_shape_functions * n_q_points);
+      for (unsigned int point = 0; point < n_q_points; ++point)
+        for (unsigned int i = 0; i < n_shape_functions; ++i)
+          second_derivative(point, i) = fe->shape_grad_grad(i, points[point]);
+    }
+
+  if (update_flags & (update_jacobian_2nd_derivatives |
+                      update_jacobian_pushed_forward_2nd_derivatives))
+    {
+      shape_third_derivatives.resize(n_shape_functions * n_q_points);
+      for (unsigned int point = 0; point < n_q_points; ++point)
+        for (unsigned int i = 0; i < n_shape_functions; ++i)
+          third_derivative(point, i) =
+            fe->shape_3rd_derivative(i, points[point]);
+    }
+
+  if (update_flags & (update_jacobian_3rd_derivatives |
+                      update_jacobian_pushed_forward_3rd_derivatives))
+    {
+      shape_fourth_derivatives.resize(n_shape_functions * n_q_points);
+      for (unsigned int point = 0; point < n_q_points; ++point)
+        for (unsigned int i = 0; i < n_shape_functions; ++i)
+          fourth_derivative(point, i) =
+            fe->shape_4th_derivative(i, points[point]);
+    }
+
+  // This (for face values and simplices) can be different for different
+  // calls, so always copy
+  quadrature_weights = quadrature.get_weights();
+}
+
+
+
+template <int dim, int spacedim, typename VectorType>
 std::size_t
 MappingFEField<dim, spacedim, VectorType>::InternalData::memory_consumption()
   const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return 0;
 }
 
@@ -211,6 +291,7 @@ MappingFEField<dim, spacedim, VectorType>::MappingFEField(
               reference_cell.template get_nodal_type_quadrature<dim>(),
               update_values)
 {
+  AssertDimension(euler_dof_handler.n_dofs(), euler_vector.size());
   unsigned int size = 0;
   for (unsigned int i = 0; i < fe_mask.size(); ++i)
     {
@@ -257,7 +338,10 @@ MappingFEField<dim, spacedim, VectorType>::MappingFEField(
   this->euler_vector.clear();
   this->euler_vector.resize(euler_vector.size());
   for (unsigned int i = 0; i < euler_vector.size(); ++i)
-    this->euler_vector[i] = &euler_vector[i];
+    {
+      AssertDimension(euler_dof_handler.n_dofs(i), euler_vector[i].size());
+      this->euler_vector[i] = &euler_vector[i];
+    }
 }
 
 
@@ -299,7 +383,10 @@ MappingFEField<dim, spacedim, VectorType>::MappingFEField(
     euler_dof_handler.get_triangulation().n_global_levels());
   for (unsigned int i = euler_vector.min_level(); i <= euler_vector.max_level();
        ++i)
-    this->euler_vector[i] = &euler_vector[i];
+    {
+      AssertDimension(euler_dof_handler.n_dofs(i), euler_vector[i].size());
+      this->euler_vector[i] = &euler_vector[i];
+    }
 }
 
 
@@ -360,7 +447,12 @@ MappingFEField<dim, spacedim, VectorType>::is_compatible_with(
 
 template <int dim, int spacedim, typename VectorType>
 boost::container::small_vector<Point<spacedim>,
-                               GeometryInfo<dim>::vertices_per_cell>
+#ifndef _MSC_VER
+                               ReferenceCells::max_n_vertices<dim>()
+#else
+                               GeometryInfo<dim>::vertices_per_cell
+#endif
+                               >
 MappingFEField<dim, spacedim, VectorType>::get_vertices(
   const typename Triangulation<dim, spacedim>::cell_iterator &cell) const
 {
@@ -398,7 +490,12 @@ MappingFEField<dim, spacedim, VectorType>::get_vertices(
     uses_level_dofs ? *euler_vector[cell->level()] : *euler_vector[0];
 
   boost::container::small_vector<Point<spacedim>,
-                                 GeometryInfo<dim>::vertices_per_cell>
+#ifndef _MSC_VER
+                                 ReferenceCells::max_n_vertices<dim>()
+#else
+                                 GeometryInfo<dim>::vertices_per_cell
+#endif
+                                 >
     vertices(cell->n_vertices());
   for (unsigned int i = 0; i < dofs_per_cell; ++i)
     {
@@ -412,50 +509,13 @@ MappingFEField<dim, spacedim, VectorType>::get_vertices(
             for (const unsigned int v : cell->vertex_indices())
               vertices[v][comp] += fe_values.shape_value(i, v) * value;
           else
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
     }
 
   return vertices;
 }
 
-
-
-template <int dim, int spacedim, typename VectorType>
-void
-MappingFEField<dim, spacedim, VectorType>::compute_shapes_virtual(
-  const std::vector<Point<dim>>                                    &unit_points,
-  typename MappingFEField<dim, spacedim, VectorType>::InternalData &data) const
-{
-  const auto         fe       = &euler_dof_handler->get_fe();
-  const unsigned int n_points = unit_points.size();
-
-  for (unsigned int point = 0; point < n_points; ++point)
-    {
-      if (data.shape_values.size() != 0)
-        for (unsigned int i = 0; i < data.n_shape_functions; ++i)
-          data.shape(point, i) = fe->shape_value(i, unit_points[point]);
-
-      if (data.shape_derivatives.size() != 0)
-        for (unsigned int i = 0; i < data.n_shape_functions; ++i)
-          data.derivative(point, i) = fe->shape_grad(i, unit_points[point]);
-
-      if (data.shape_second_derivatives.size() != 0)
-        for (unsigned int i = 0; i < data.n_shape_functions; ++i)
-          data.second_derivative(point, i) =
-            fe->shape_grad_grad(i, unit_points[point]);
-
-      if (data.shape_third_derivatives.size() != 0)
-        for (unsigned int i = 0; i < data.n_shape_functions; ++i)
-          data.third_derivative(point, i) =
-            fe->shape_3rd_derivative(i, unit_points[point]);
-
-      if (data.shape_fourth_derivatives.size() != 0)
-        for (unsigned int i = 0; i < data.n_shape_functions; ++i)
-          data.fourth_derivative(point, i) =
-            fe->shape_4th_derivative(i, unit_points[point]);
-    }
-}
 
 
 template <int dim, int spacedim, typename VectorType>
@@ -512,33 +572,14 @@ MappingFEField<dim, spacedim, VectorType>::requires_update_flags(
 }
 
 
-
 template <int dim, int spacedim, typename VectorType>
 void
-MappingFEField<dim, spacedim, VectorType>::compute_data(
-  const UpdateFlags      update_flags,
-  const Quadrature<dim> &q,
-  const unsigned int     n_original_q_points,
-  InternalData          &data) const
+MappingFEField<dim, spacedim, VectorType>::compute_face_data(
+  const unsigned int n_original_q_points,
+  InternalData      &data) const
 {
-  // store the flags in the internal data object so we can access them
-  // in fill_fe_*_values(). use the transitive hull of the required
-  // flags
-  data.update_each = requires_update_flags(update_flags);
-
-  const unsigned int n_q_points = q.size();
-
-  // see if we need the (transformation) shape function values
-  // and/or gradients and resize the necessary arrays
-  if (data.update_each & update_quadrature_points)
-    data.shape_values.resize(data.n_shape_functions * n_q_points);
-
-  if (data.update_each &
-      (update_covariant_transformation | update_contravariant_transformation |
-       update_JxW_values | update_boundary_forms | update_normal_vectors |
-       update_jacobians | update_jacobian_grads | update_inverse_jacobians))
-    data.shape_derivatives.resize(data.n_shape_functions * n_q_points);
-
+  // Set to the size of a single quadrature object for faces, as the size set
+  // in in reinit() is for all points
   if (data.update_each & update_covariant_transformation)
     data.covariant.resize(n_original_q_points);
 
@@ -547,36 +588,6 @@ MappingFEField<dim, spacedim, VectorType>::compute_data(
 
   if (data.update_each & update_volume_elements)
     data.volume_elements.resize(n_original_q_points);
-
-  if (data.update_each &
-      (update_jacobian_grads | update_jacobian_pushed_forward_grads))
-    data.shape_second_derivatives.resize(data.n_shape_functions * n_q_points);
-
-  if (data.update_each & (update_jacobian_2nd_derivatives |
-                          update_jacobian_pushed_forward_2nd_derivatives))
-    data.shape_third_derivatives.resize(data.n_shape_functions * n_q_points);
-
-  if (data.update_each & (update_jacobian_3rd_derivatives |
-                          update_jacobian_pushed_forward_3rd_derivatives))
-    data.shape_fourth_derivatives.resize(data.n_shape_functions * n_q_points);
-
-  compute_shapes_virtual(q.get_points(), data);
-
-  // This (for face values and simplices) can be different for different calls,
-  // so always copy
-  data.quadrature_weights = q.get_weights();
-}
-
-
-template <int dim, int spacedim, typename VectorType>
-void
-MappingFEField<dim, spacedim, VectorType>::compute_face_data(
-  const UpdateFlags      update_flags,
-  const Quadrature<dim> &q,
-  const unsigned int     n_original_q_points,
-  InternalData          &data) const
-{
-  compute_data(update_flags, q, n_original_q_points, data);
 
   if (dim > 1)
     {
@@ -593,10 +604,9 @@ MappingFEField<dim, spacedim, VectorType>::compute_face_data(
           for (unsigned int i = 0; i < n_faces; ++i)
             {
               data.unit_tangentials[i].resize(n_original_q_points);
-              std::fill(
-                data.unit_tangentials[i].begin(),
-                data.unit_tangentials[i].end(),
-                reference_cell.template unit_tangential_vectors<dim>(i, 0));
+              std::fill(data.unit_tangentials[i].begin(),
+                        data.unit_tangentials[i].end(),
+                        reference_cell.template face_tangent_vector<dim>(i, 0));
               if (dim > 2)
                 {
                   data.unit_tangentials[n_faces + i].resize(
@@ -604,12 +614,13 @@ MappingFEField<dim, spacedim, VectorType>::compute_face_data(
                   std::fill(
                     data.unit_tangentials[n_faces + i].begin(),
                     data.unit_tangentials[n_faces + i].end(),
-                    reference_cell.template unit_tangential_vectors<dim>(i, 1));
+                    reference_cell.template face_tangent_vector<dim>(i, 1));
                 }
             }
         }
     }
 }
+
 
 
 template <int dim, int spacedim, typename VectorType>
@@ -620,8 +631,7 @@ MappingFEField<dim, spacedim, VectorType>::get_data(
 {
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> data_ptr =
     std::make_unique<InternalData>(euler_dof_handler->get_fe(), fe_mask);
-  auto &data = dynamic_cast<InternalData &>(*data_ptr);
-  this->compute_data(update_flags, quadrature, quadrature.size(), data);
+  data_ptr->reinit(requires_update_flags(update_flags), quadrature);
 
   return data_ptr;
 }
@@ -638,10 +648,12 @@ MappingFEField<dim, spacedim, VectorType>::get_face_data(
 
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> data_ptr =
     std::make_unique<InternalData>(euler_dof_handler->get_fe(), fe_mask);
-  auto                 &data = dynamic_cast<InternalData &>(*data_ptr);
+  auto &data = dynamic_cast<InternalData &>(*data_ptr);
+
   const Quadrature<dim> q(
     QProjector<dim>::project_to_all_faces(reference_cell, quadrature[0]));
-  this->compute_face_data(update_flags, q, quadrature[0].size(), data);
+  data.reinit(requires_update_flags(update_flags), q);
+  this->compute_face_data(quadrature[0].size(), data);
 
   return data_ptr;
 }
@@ -655,10 +667,12 @@ MappingFEField<dim, spacedim, VectorType>::get_subface_data(
 {
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> data_ptr =
     std::make_unique<InternalData>(euler_dof_handler->get_fe(), fe_mask);
-  auto                 &data = dynamic_cast<InternalData &>(*data_ptr);
+  auto &data = dynamic_cast<InternalData &>(*data_ptr);
+
   const Quadrature<dim> q(
     QProjector<dim>::project_to_all_subfaces(reference_cell, quadrature));
-  this->compute_face_data(update_flags, q, quadrature.size(), data);
+  data.reinit(requires_update_flags(update_flags), q);
+  this->compute_face_data(quadrature.size(), data);
 
   return data_ptr;
 }
@@ -1314,7 +1328,7 @@ namespace internal
                           cross_product_3d(data.aux[0][i], data.aux[1][i]);
                         break;
                       default:
-                        Assert(false, ExcNotImplemented());
+                        DEAL_II_NOT_IMPLEMENTED();
                     }
               }
             else //(dim < spacedim)
@@ -1719,9 +1733,8 @@ MappingFEField<dim, spacedim, VectorType>::fill_fe_face_values(
       numbers::invalid_unsigned_int,
       QProjector<dim>::DataSetDescriptor::face(reference_cell,
                                                face_no,
-                                               cell->face_orientation(face_no),
-                                               cell->face_flip(face_no),
-                                               cell->face_rotation(face_no),
+                                               cell->combined_face_orientation(
+                                                 face_no),
                                                quadrature[0].size()),
       data,
       euler_dof_handler->get_fe(),
@@ -1760,9 +1773,8 @@ MappingFEField<dim, spacedim, VectorType>::fill_fe_subface_values(
     QProjector<dim>::DataSetDescriptor::subface(reference_cell,
                                                 face_no,
                                                 subface_no,
-                                                cell->face_orientation(face_no),
-                                                cell->face_flip(face_no),
-                                                cell->face_rotation(face_no),
+                                                cell->combined_face_orientation(
+                                                  face_no),
                                                 quadrature.size(),
                                                 cell->subface_case(face_no)),
     data,
@@ -2016,7 +2028,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -2055,7 +2067,7 @@ namespace internal
                 return;
               }
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
     } // namespace
@@ -2162,7 +2174,7 @@ MappingFEField<dim, spacedim, VectorType>::transform(
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2201,9 +2213,9 @@ MappingFEField<dim, spacedim, VectorType>::transform_unit_to_real_cell(
   Assert(dynamic_cast<InternalData *>(mdata.get()) != nullptr,
          ExcInternalError());
 
-  update_internal_dofs(cell, dynamic_cast<InternalData &>(*mdata));
+  update_internal_dofs(cell, static_cast<InternalData &>(*mdata));
 
-  return do_transform_unit_to_real_cell(dynamic_cast<InternalData &>(*mdata));
+  return do_transform_unit_to_real_cell(static_cast<InternalData &>(*mdata));
 }
 
 
@@ -2253,22 +2265,20 @@ MappingFEField<dim, spacedim, VectorType>::transform_real_to_unit_cell(
 
   initial_p_unit = cell->reference_cell().closest_point(initial_p_unit);
 
-  const Quadrature<dim> point_quadrature(initial_p_unit);
-
   UpdateFlags update_flags = update_quadrature_points | update_jacobians;
   if (spacedim > dim)
     update_flags |= update_jacobian_grads;
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> mdata(
-    get_data(update_flags, point_quadrature));
+    get_data(update_flags, Quadrature<dim>(initial_p_unit)));
   Assert(dynamic_cast<InternalData *>(mdata.get()) != nullptr,
          ExcInternalError());
 
-  update_internal_dofs(cell, dynamic_cast<InternalData &>(*mdata));
+  update_internal_dofs(cell, static_cast<InternalData &>(*mdata));
 
   return do_transform_real_to_unit_cell(cell,
                                         p,
                                         initial_p_unit,
-                                        dynamic_cast<InternalData &>(*mdata));
+                                        static_cast<InternalData &>(*mdata));
 }
 
 
@@ -2277,7 +2287,7 @@ Point<dim>
 MappingFEField<dim, spacedim, VectorType>::do_transform_real_to_unit_cell(
   const typename Triangulation<dim, spacedim>::cell_iterator &cell,
   const Point<spacedim>                                      &p,
-  const Point<dim>                                           &initial_p_unit,
+  const Point<dim>                                           &starting_guess,
   InternalData                                               &mdata) const
 {
   const unsigned int n_shapes = mdata.shape_values.size();
@@ -2294,10 +2304,11 @@ MappingFEField<dim, spacedim, VectorType>::do_transform_real_to_unit_cell(
   // The shape values and derivatives
   // of the mapping at this point are
   // previously computed.
-  // f(x)
-  Point<dim> p_unit = initial_p_unit;
+
+  Point<dim> p_unit = starting_guess;
   Point<dim> f;
-  compute_shapes_virtual(std::vector<Point<dim>>(1, p_unit), mdata);
+  mdata.reinit(mdata.update_each, Quadrature<dim>(starting_guess));
+
   Point<spacedim>     p_real(do_transform_unit_to_real_cell(mdata));
   Tensor<1, spacedim> p_minus_F              = p - p_real;
   const double        eps                    = 1.e-12 * cell->diameter();
@@ -2345,10 +2356,10 @@ MappingFEField<dim, spacedim, VectorType>::do_transform_real_to_unit_cell(
             p_unit_trial[i] -= step_length * delta[i];
           // shape values and derivatives
           // at new p_unit point
-          compute_shapes_virtual(std::vector<Point<dim>>(1, p_unit_trial),
-                                 mdata);
+          mdata.reinit(mdata.update_each, Quadrature<dim>(p_unit_trial));
           // f(x)
-          Point<spacedim> p_real_trial = do_transform_unit_to_real_cell(mdata);
+          const Point<spacedim> p_real_trial =
+            do_transform_unit_to_real_cell(mdata);
           const Tensor<1, spacedim> f_trial = p - p_real_trial;
           // see if we are making progress with the current step length
           // and if not, reduce it by a factor of two and try again

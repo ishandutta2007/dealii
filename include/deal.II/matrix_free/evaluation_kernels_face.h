@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2017 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_matrix_free_evaluation_kernels_face_h
@@ -134,7 +133,7 @@ namespace internal
                   values_quad[0] = values_dofs[0];
                   break;
                 default:
-                  Assert(false, ExcNotImplemented());
+                  DEAL_II_NOT_IMPLEMENTED();
               }
             // Note: we always keep storage of values, 1st and 2nd derivatives
             // in an array
@@ -333,7 +332,7 @@ namespace internal
                   values_dofs[0] = values_quad[0];
                   break;
                 default:
-                  Assert(false, ExcNotImplemented());
+                  DEAL_II_NOT_IMPLEMENTED();
               }
             values_dofs += 3 * n_dofs;
             values_quad += n_q_points;
@@ -558,7 +557,7 @@ namespace internal
       // TODO: This is currently not implemented, but the test
       // matrix_vector_rt_face_03 apparently works without it -> check
       // if (subface_index < GeometryInfo<dim - 1>::max_children_per_cell)
-      //  Assert(false, ExcNotImplemented());
+      //  DEAL_II_NOT_IMPLEMENTED();
 
       using Eval = EvaluatorTensorProduct<evaluate_evenodd,
                                           dim - 1,
@@ -1034,7 +1033,7 @@ namespace internal
           // This should never happen since the FE_RaviartThomasNodal is not
           // defined for dim = 1. It prevents compiler warnings of infinite
           // recursion.
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
           return;
         }
 
@@ -1447,107 +1446,149 @@ namespace internal
   template <int dim, typename Number>
   struct FEFaceEvaluationImplEvaluateSelector
   {
-    template <int fe_degree, int n_q_points_1d>
     static bool
-    run(const unsigned int                     n_components,
-        const EvaluationFlags::EvaluationFlags evaluation_flag,
-        const Number                          *values_dofs,
-        FEEvaluationData<dim, Number, true>   &fe_eval)
+    evaluate_tensor_none(const unsigned int                     n_components,
+                         const EvaluationFlags::EvaluationFlags evaluation_flag,
+                         const Number                          *values_dofs,
+                         FEEvaluationData<dim, Number, true>   &fe_eval)
     {
       const auto &shape_info = fe_eval.get_shape_info();
       const auto &shape_data = shape_info.data.front();
       using Number2 =
         typename FEEvaluationData<dim, Number, true>::shape_info_number_type;
 
-      if (shape_info.element_type == MatrixFreeFunctions::tensor_none)
+      Assert((fe_eval.get_dof_access_index() ==
+                MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+              fe_eval.is_interior_face() == false) == false,
+             ExcNotImplemented());
+
+      const unsigned int face_no          = fe_eval.get_face_no();
+      const unsigned int face_orientation = fe_eval.get_face_orientation();
+      const std::size_t  n_dofs     = shape_info.dofs_per_component_on_cell;
+      const std::size_t  n_q_points = shape_info.n_q_points_faces[face_no];
+
+      if (evaluation_flag & EvaluationFlags::values)
         {
-          Assert((fe_eval.get_dof_access_index() ==
-                    MatrixFreeFunctions::DoFInfo::dof_access_cell &&
-                  fe_eval.is_interior_face() == false) == false,
-                 ExcNotImplemented());
+          const auto *const shape_values =
+            &shape_data.shape_values_face(face_no, face_orientation, 0);
 
-          const unsigned int face_no          = fe_eval.get_face_no();
-          const unsigned int face_orientation = fe_eval.get_face_orientation();
-          const std::size_t  n_dofs     = shape_info.dofs_per_component_on_cell;
-          const std::size_t  n_q_points = shape_info.n_q_points_faces[face_no];
+          auto *out = fe_eval.begin_values();
+          auto *in  = values_dofs;
 
-          using Eval =
-            EvaluatorTensorProduct<evaluate_general, 1, 0, 0, Number, Number2>;
-
-          if (evaluation_flag & EvaluationFlags::values)
+          for (unsigned int c = 0; c < n_components; c += 3)
             {
-              const auto *const shape_values =
-                &shape_data.shape_values_face(face_no, face_orientation, 0);
+              if (c + 1 == n_components)
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 1>(
+                  shape_values, in, out, n_dofs, n_q_points, 1, 1);
+              else if (c + 2 == n_components)
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 2>(
+                  shape_values, in, out, n_dofs, n_q_points, 1, 1);
+              else
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 3>(
+                  shape_values, in, out, n_dofs, n_q_points, 1, 1);
 
-              auto *values_quad_ptr        = fe_eval.begin_values();
-              auto *values_dofs_actual_ptr = values_dofs;
-
-              Eval eval(shape_values, nullptr, nullptr, n_dofs, n_q_points);
-              for (unsigned int c = 0; c < n_components; ++c)
-                {
-                  eval.template values<0, true, false>(values_dofs_actual_ptr,
-                                                       values_quad_ptr);
-
-                  values_quad_ptr += n_q_points;
-                  values_dofs_actual_ptr += n_dofs;
-                }
+              out += 3 * n_q_points;
+              in += 3 * n_dofs;
             }
-
-          if (evaluation_flag & EvaluationFlags::gradients)
-            {
-              auto       *gradients_quad_ptr     = fe_eval.begin_gradients();
-              const auto *values_dofs_actual_ptr = values_dofs;
-
-              std::array<const Number2 *, dim> shape_gradients;
-              for (unsigned int d = 0; d < dim; ++d)
-                shape_gradients[d] = &shape_data.shape_gradients_face(
-                  face_no, face_orientation, d, 0);
-
-              for (unsigned int c = 0; c < n_components; ++c)
-                {
-                  for (unsigned int d = 0; d < dim; ++d)
-                    {
-                      Eval eval(nullptr,
-                                shape_gradients[d],
-                                nullptr,
-                                n_dofs,
-                                n_q_points);
-
-                      eval.template gradients<0, true, false, dim>(
-                        values_dofs_actual_ptr, gradients_quad_ptr + d);
-                    }
-                  gradients_quad_ptr += n_q_points * dim;
-                  values_dofs_actual_ptr += n_dofs;
-                }
-            }
-
-          Assert(!(evaluation_flag & EvaluationFlags::hessians),
-                 ExcNotImplemented());
-
-          return true;
         }
 
-      const unsigned int dofs_per_face =
-        fe_degree > -1 ? Utilities::pow(fe_degree + 1, dim - 1) :
-                         Utilities::pow(shape_data.fe_degree + 1, dim - 1);
+      if (evaluation_flag & EvaluationFlags::gradients)
+        {
+          auto       *out = fe_eval.begin_gradients();
+          const auto *in  = values_dofs;
 
-      // Note: we always keep storage of values, 1st and 2nd derivatives in an
-      // array, so reserve space for all three here
-      Number *temp         = fe_eval.get_scratch_data().begin();
-      Number *scratch_data = temp + 3 * n_components * dofs_per_face;
+          const auto *const shape_gradients =
+            &shape_data.shape_gradients_face(face_no, face_orientation, 0);
 
-      bool use_vectorization = true;
+          for (unsigned int c = 0; c < n_components; c += 3)
+            {
+              if (c + 1 == n_components)
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 1>(
+                  shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+              else if (c + 2 == n_components)
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 2>(
+                  shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+              else
+                apply_matrix_vector_product<evaluate_general,
+                                            EvaluatorQuantity::value,
+                                            /*transpose_matrix*/ true,
+                                            /*add*/ false,
+                                            /*consider_strides*/ false,
+                                            Number,
+                                            Number2,
+                                            /*n_components*/ 3>(
+                  shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+              out += 3 * n_q_points * dim;
+              in += 3 * n_dofs;
+            }
+        }
 
-      if (fe_eval.get_dof_access_index() ==
-            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
-          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
-        for (unsigned int v = 0; v < Number::size(); ++v)
-          if (fe_eval.get_cell_ids()[v] != numbers::invalid_unsigned_int &&
-              fe_eval.get_face_no(v) != fe_eval.get_face_no(0))
-            use_vectorization = false;
+      Assert(!(evaluation_flag & EvaluationFlags::hessians),
+             ExcNotImplemented());
+
+      return true;
+    }
+
+    template <int fe_degree>
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+      static void
+      project_to_face(const unsigned int                     n_components,
+                      const EvaluationFlags::EvaluationFlags evaluation_flag,
+                      const Number                          *values_dofs,
+                      FEEvaluationData<dim, Number, true>   &fe_eval,
+                      const bool                             use_vectorization,
+                      Number                                *temp,
+                      Number                                *scratch_data)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
 
       if (use_vectorization == false)
         {
+          const auto &shape_data = shape_info.data.front();
+
+          const unsigned int dofs_per_comp_face =
+            fe_degree > -1 ?
+              Utilities::pow(fe_degree + 1, dim - 1) :
+              Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+          const unsigned int dofs_per_face = n_components * dofs_per_comp_face;
+
           for (unsigned int v = 0; v < Number::size(); ++v)
             {
               // the loop breaks once an invalid_unsigned_int is hit for
@@ -1555,8 +1596,7 @@ namespace internal
               // some faces might be at the boundaries but others not)
               if (fe_eval.get_cell_ids()[v] == numbers::invalid_unsigned_int)
                 {
-                  for (unsigned int i = 0; i < 3 * n_components * dofs_per_face;
-                       ++i)
+                  for (unsigned int i = 0; i < 3 * dofs_per_face; ++i)
                     temp[i][v] = 0;
                   continue;
                 }
@@ -1569,8 +1609,7 @@ namespace internal
                                                   scratch_data,
                                                   fe_eval.get_face_no(v));
 
-              for (unsigned int i = 0; i < 3 * n_components * dofs_per_face;
-                   ++i)
+              for (unsigned int i = 0; i < 3 * dofs_per_face; ++i)
                 temp[i][v] = scratch_data[i][v];
             }
         }
@@ -1582,6 +1621,22 @@ namespace internal
                                             values_dofs,
                                             temp,
                                             fe_eval.get_face_no());
+    }
+
+
+    template <int fe_degree, int n_q_points_1d>
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+      static void
+      evaluate_in_face(const unsigned int                     n_components,
+                       const EvaluationFlags::EvaluationFlags evaluation_flag,
+                       FEEvaluationData<dim, Number, true>   &fe_eval,
+                       Number                                *temp,
+                       Number                                *scratch_data)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
 
       const unsigned int     subface_index = fe_eval.get_subface_index();
       constexpr unsigned int n_q_points_1d_actual =
@@ -1635,6 +1690,20 @@ namespace internal
                                                        fe_eval.begin_hessians(),
                                                        scratch_data,
                                                        subface_index);
+    }
+
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+    static void
+    adjust_quadrature_for_face_orientation(
+      const unsigned int                     n_components,
+      const EvaluationFlags::EvaluationFlags evaluation_flag,
+      FEEvaluationData<dim, Number, true>   &fe_eval,
+      const bool                             use_vectorization,
+      Number                                *temp)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
 
       if (use_vectorization == false)
         {
@@ -1652,7 +1721,7 @@ namespace internal
                   n_components,
                   v,
                   evaluation_flag,
-                  &fe_eval.get_shape_info().face_orientations_quad(
+                  &shape_info.face_orientations_quad(
                     fe_eval.get_face_orientation(v), 0),
                   false,
                   shape_info.n_q_points_face,
@@ -1667,14 +1736,160 @@ namespace internal
           dim,
           n_components,
           evaluation_flag,
-          &fe_eval.get_shape_info().face_orientations_quad(
-            fe_eval.get_face_orientation(), 0),
+          &shape_info.face_orientations_quad(fe_eval.get_face_orientation(), 0),
           false,
           shape_info.n_q_points_face,
           temp,
           fe_eval.begin_values(),
           fe_eval.begin_gradients(),
           fe_eval.begin_hessians());
+    }
+
+
+
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    evaluate_tensor(const unsigned int                     n_components,
+                    const EvaluationFlags::EvaluationFlags evaluation_flag,
+                    const Number                          *values_dofs,
+                    FEEvaluationData<dim, Number, true>   &fe_eval)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      // Note: we always keep storage of values, 1st and 2nd derivatives in an
+      // array, so reserve space for all three here
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      bool use_vectorization = true;
+      if (fe_eval.get_dof_access_index() ==
+            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
+        for (unsigned int v = 0; v < Number::size(); ++v)
+          if (fe_eval.get_cell_ids()[v] != numbers::invalid_unsigned_int &&
+              fe_eval.get_face_no(v) != fe_eval.get_face_no(0))
+            use_vectorization = false;
+
+      project_to_face<fe_degree>(n_components,
+                                 evaluation_flag,
+                                 values_dofs,
+                                 fe_eval,
+                                 use_vectorization,
+                                 temp,
+                                 scratch_data);
+
+      evaluate_in_face<fe_degree, n_q_points_1d>(
+        n_components, evaluation_flag, fe_eval, temp, scratch_data);
+
+      if (dim == 3)
+        adjust_quadrature_for_face_orientation(
+          n_components, evaluation_flag, fe_eval, use_vectorization, temp);
+
+      return false;
+    }
+
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags evaluation_flag,
+        const Number                          *values_dofs,
+        FEEvaluationData<dim, Number, true>   &fe_eval)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+
+      if (shape_info.element_type == MatrixFreeFunctions::tensor_none)
+        return evaluate_tensor_none(n_components,
+                                    evaluation_flag,
+                                    values_dofs,
+                                    fe_eval);
+      else
+        return evaluate_tensor<fe_degree, n_q_points_1d>(n_components,
+                                                         evaluation_flag,
+                                                         values_dofs,
+                                                         fe_eval);
+    }
+  };
+
+
+
+  template <int dim, typename Number>
+  struct FEFaceEvaluationImplProjectToFaceSelector
+  {
+    template <int fe_degree>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags evaluation_flag,
+        const Number                          *values_dofs,
+        FEEvaluationData<dim, Number, true>   &fe_eval)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      // Note: we always keep storage of values, 1st and 2nd derivatives in an
+      // array, so reserve space for all three here
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      bool use_vectorization = true;
+      if (fe_eval.get_dof_access_index() ==
+            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
+        for (unsigned int v = 0; v < Number::size(); ++v)
+          if (fe_eval.get_cell_ids()[v] != numbers::invalid_unsigned_int &&
+              fe_eval.get_face_no(v) != fe_eval.get_face_no(0))
+            use_vectorization = false;
+
+      FEFaceEvaluationImplEvaluateSelector<dim, Number>::
+        template project_to_face<fe_degree>(n_components,
+                                            evaluation_flag,
+                                            values_dofs,
+                                            fe_eval,
+                                            use_vectorization,
+                                            temp,
+                                            scratch_data);
+
+      return false;
+    }
+  };
+
+
+
+  template <int dim, typename Number>
+  struct FEFaceEvaluationImplEvaluateInFaceSelector
+  {
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags evaluation_flag,
+        FEEvaluationData<dim, Number, true>   &fe_eval)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      // Note: we always keep storage of values, 1st and 2nd derivatives in an
+      // array, so reserve space for all three here
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      FEFaceEvaluationImplEvaluateSelector<dim, Number>::
+        template evaluate_in_face<fe_degree, n_q_points_1d>(
+          n_components, evaluation_flag, fe_eval, temp, scratch_data);
 
       return false;
     }
@@ -1685,111 +1900,211 @@ namespace internal
   template <int dim, typename Number>
   struct FEFaceEvaluationImplIntegrateSelector
   {
-    template <int fe_degree, int n_q_points_1d>
     static bool
-    run(const unsigned int                     n_components,
-        const EvaluationFlags::EvaluationFlags integration_flag,
-        Number                                *values_dofs,
-        FEEvaluationData<dim, Number, true>   &fe_eval)
+    integrate_tensor_none(
+      const unsigned int                     n_components,
+      const EvaluationFlags::EvaluationFlags integration_flag,
+      Number                                *values_dofs,
+      FEEvaluationData<dim, Number, true>   &fe_eval,
+      const bool                             sum_into_values)
     {
       const auto &shape_info = fe_eval.get_shape_info();
       const auto &shape_data = shape_info.data.front();
       using Number2 =
         typename FEEvaluationData<dim, Number, true>::shape_info_number_type;
 
-      if (shape_info.element_type == MatrixFreeFunctions::tensor_none)
+      Assert((fe_eval.get_dof_access_index() ==
+                MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+              fe_eval.is_interior_face() == false) == false,
+             ExcNotImplemented());
+
+      const unsigned int face_no          = fe_eval.get_face_no();
+      const unsigned int face_orientation = fe_eval.get_face_orientation();
+      const std::size_t  n_dofs     = shape_info.dofs_per_component_on_cell;
+      const std::size_t  n_q_points = shape_info.n_q_points_faces[face_no];
+
+
+      if (integration_flag & EvaluationFlags::values)
         {
-          Assert((fe_eval.get_dof_access_index() ==
-                    MatrixFreeFunctions::DoFInfo::dof_access_cell &&
-                  fe_eval.is_interior_face() == false) == false,
-                 ExcNotImplemented());
+          const auto *const shape_values =
+            &shape_data.shape_values_face(face_no, face_orientation, 0);
 
-          const unsigned int face_no          = fe_eval.get_face_no();
-          const unsigned int face_orientation = fe_eval.get_face_orientation();
-          const std::size_t  n_dofs     = shape_info.dofs_per_component_on_cell;
-          const std::size_t  n_q_points = shape_info.n_q_points_faces[face_no];
+          auto *in  = fe_eval.begin_values();
+          auto *out = values_dofs;
 
-          using Eval =
-            EvaluatorTensorProduct<evaluate_general, 1, 0, 0, Number, Number2>;
-
-          if (integration_flag & EvaluationFlags::values)
+          for (unsigned int c = 0; c < n_components; c += 3)
             {
-              const auto *const shape_values =
-                &shape_data.shape_values_face(face_no, face_orientation, 0);
-
-              auto *values_quad_ptr        = fe_eval.begin_values();
-              auto *values_dofs_actual_ptr = values_dofs;
-
-              Eval eval(shape_values, nullptr, nullptr, n_dofs, n_q_points);
-              for (unsigned int c = 0; c < n_components; ++c)
+              if (sum_into_values)
                 {
-                  eval.template values<0, false, false>(values_quad_ptr,
-                                                        values_dofs_actual_ptr);
-
-                  values_quad_ptr += n_q_points;
-                  values_dofs_actual_ptr += n_dofs;
+                  if (c + 1 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 1>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                  else if (c + 2 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 2>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                  else
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 3>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
                 }
-            }
-
-          if (integration_flag & EvaluationFlags::gradients)
-            {
-              auto *gradients_quad_ptr     = fe_eval.begin_gradients();
-              auto *values_dofs_actual_ptr = values_dofs;
-
-              std::array<const Number2 *, dim> shape_gradients;
-              for (unsigned int d = 0; d < dim; ++d)
-                shape_gradients[d] = &shape_data.shape_gradients_face(
-                  face_no, face_orientation, d, 0);
-
-              for (unsigned int c = 0; c < n_components; ++c)
+              else
                 {
-                  for (unsigned int d = 0; d < dim; ++d)
-                    {
-                      Eval eval(nullptr,
-                                shape_gradients[d],
-                                nullptr,
-                                n_dofs,
-                                n_q_points);
-
-                      if (!(integration_flag & EvaluationFlags::values) &&
-                          d == 0)
-                        eval.template gradients<0, false, false, dim>(
-                          gradients_quad_ptr + d, values_dofs_actual_ptr);
-                      else
-                        eval.template gradients<0, false, true, dim>(
-                          gradients_quad_ptr + d, values_dofs_actual_ptr);
-                    }
-                  gradients_quad_ptr += n_q_points * dim;
-                  values_dofs_actual_ptr += n_dofs;
+                  if (c + 1 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 1>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                  else if (c + 2 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 2>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                  else
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 3>(
+                      shape_values, in, out, n_dofs, n_q_points, 1, 1);
                 }
+              in += 3 * n_q_points;
+              out += 3 * n_dofs;
             }
-
-          Assert(!(integration_flag & EvaluationFlags::hessians),
-                 ExcNotImplemented());
-
-          return true;
         }
 
-      const unsigned int dofs_per_face =
-        fe_degree > -1 ? Utilities::pow(fe_degree + 1, dim - 1) :
-                         Utilities::pow(shape_data.fe_degree + 1, dim - 1);
+      if (integration_flag & EvaluationFlags::gradients)
+        {
+          auto *in  = fe_eval.begin_gradients();
+          auto *out = values_dofs;
 
-      Number *temp         = fe_eval.get_scratch_data().begin();
-      Number *scratch_data = temp + 3 * n_components * dofs_per_face;
+          const auto *const shape_gradients =
+            &shape_data.shape_gradients_face(face_no, face_orientation, 0);
 
-      bool use_vectorization = true;
+          for (unsigned int c = 0; c < n_components; ++c)
+            {
+              if (!sum_into_values &&
+                  !(integration_flag & EvaluationFlags::values))
+                {
+                  if (c + 1 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 1>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                  else if (c + 2 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 2>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                  else
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ false,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 3>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                }
+              else
+                {
+                  if (c + 1 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 1>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                  else if (c + 2 == n_components)
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 2>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                  else
+                    apply_matrix_vector_product<evaluate_general,
+                                                EvaluatorQuantity::value,
+                                                /*transpose_matrix*/ false,
+                                                /*add*/ true,
+                                                /*consider_strides*/ false,
+                                                Number,
+                                                Number2,
+                                                /*n_components*/ 3>(
+                      shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                }
+              in += 3 * n_q_points * dim;
+              out += 3 * n_dofs;
+            }
+        }
 
-      if (fe_eval.get_dof_access_index() ==
-            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
-          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
-        use_vectorization =
-          fe_eval.get_cell_ids()[0] != numbers::invalid_unsigned_int &&
-          std::all_of(fe_eval.get_cell_ids().begin() + 1,
-                      fe_eval.get_cell_ids().end(),
-                      [&](const auto &v) {
-                        return v == fe_eval.get_cell_ids()[0] ||
-                               v == numbers::invalid_unsigned_int;
-                      });
+      Assert(!(integration_flag & EvaluationFlags::hessians),
+             ExcNotImplemented());
+
+      return true;
+    }
+
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+    static void
+    adjust_quadrature_for_face_orientation(
+      const unsigned int                     n_components,
+      const EvaluationFlags::EvaluationFlags integration_flag,
+      FEEvaluationData<dim, Number, true>   &fe_eval,
+      const bool                             use_vectorization,
+      Number                                *temp)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
 
       if (use_vectorization == false)
         {
@@ -1830,6 +2145,21 @@ namespace internal
           fe_eval.begin_values(),
           fe_eval.begin_gradients(),
           fe_eval.begin_hessians());
+    }
+
+    template <int fe_degree, int n_q_points_1d>
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+      static void
+      integrate_in_face(const unsigned int                     n_components,
+                        const EvaluationFlags::EvaluationFlags integration_flag,
+                        FEEvaluationData<dim, Number, true>   &fe_eval,
+                        Number                                *temp,
+                        Number                                *scratch_data)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
 
       const unsigned int n_q_points_1d_actual =
         fe_degree > -1 ? n_q_points_1d : 0;
@@ -1884,6 +2214,30 @@ namespace internal
                                      fe_eval.begin_hessians(),
                                      scratch_data,
                                      subface_index);
+    }
+
+    template <int fe_degree>
+#ifndef DEBUG
+    DEAL_II_ALWAYS_INLINE
+#endif
+      static void
+      collect_from_face(const unsigned int                     n_components,
+                        const EvaluationFlags::EvaluationFlags integration_flag,
+                        Number                                *values_dofs,
+                        FEEvaluationData<dim, Number, true>   &fe_eval,
+                        const bool    use_vectorization,
+                        const Number *temp,
+                        Number       *scratch_data,
+                        const bool    sum_into_values)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+      const unsigned int dofs_per_face = n_components * dofs_per_comp_face;
 
       if (use_vectorization == false)
         {
@@ -1899,23 +2253,195 @@ namespace internal
                 template interpolate<false, false>(n_components,
                                                    integration_flag,
                                                    shape_info,
-                                                   values_dofs,
+                                                   temp,
                                                    scratch_data,
                                                    fe_eval.get_face_no(v));
 
-              for (unsigned int i = 0; i < 3 * n_components * dofs_per_face;
-                   ++i)
-                temp[i][v] = scratch_data[i][v];
+              if (sum_into_values)
+                for (unsigned int i = 0; i < 3 * dofs_per_face; ++i)
+                  values_dofs[i][v] += scratch_data[i][v];
+              else
+                for (unsigned int i = 0; i < 3 * dofs_per_face; ++i)
+                  values_dofs[i][v] = scratch_data[i][v];
             }
         }
       else
-        FEFaceNormalEvaluationImpl<dim, fe_degree, Number>::
-          template interpolate<false, false>(n_components,
-                                             integration_flag,
-                                             shape_info,
-                                             temp,
-                                             values_dofs,
-                                             fe_eval.get_face_no());
+        {
+          if (sum_into_values)
+            FEFaceNormalEvaluationImpl<dim, fe_degree, Number>::
+              template interpolate<false, true>(n_components,
+                                                integration_flag,
+                                                shape_info,
+                                                temp,
+                                                values_dofs,
+                                                fe_eval.get_face_no());
+          else
+            FEFaceNormalEvaluationImpl<dim, fe_degree, Number>::
+              template interpolate<false, false>(n_components,
+                                                 integration_flag,
+                                                 shape_info,
+                                                 temp,
+                                                 values_dofs,
+                                                 fe_eval.get_face_no());
+        }
+    }
+
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    integrate_tensor(const unsigned int                     n_components,
+                     const EvaluationFlags::EvaluationFlags integration_flag,
+                     Number                                *values_dofs,
+                     FEEvaluationData<dim, Number, true>   &fe_eval,
+                     const bool                             sum_into_values)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      bool use_vectorization = true;
+
+      if (fe_eval.get_dof_access_index() ==
+            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
+        use_vectorization =
+          fe_eval.get_cell_ids()[0] != numbers::invalid_unsigned_int &&
+          std::all_of(fe_eval.get_cell_ids().begin() + 1,
+                      fe_eval.get_cell_ids().end(),
+                      [&](const auto &v) {
+                        return v == fe_eval.get_cell_ids()[0] ||
+                               v == numbers::invalid_unsigned_int;
+                      });
+
+      if (dim == 3)
+        adjust_quadrature_for_face_orientation(
+          n_components, integration_flag, fe_eval, use_vectorization, temp);
+
+      integrate_in_face<fe_degree, n_q_points_1d>(
+        n_components, integration_flag, fe_eval, temp, scratch_data);
+
+      collect_from_face<fe_degree>(n_components,
+                                   integration_flag,
+                                   values_dofs,
+                                   fe_eval,
+                                   use_vectorization,
+                                   temp,
+                                   scratch_data,
+                                   sum_into_values);
+
+      return false;
+    }
+
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags integration_flag,
+        Number                                *values_dofs,
+        FEEvaluationData<dim, Number, true>   &fe_eval,
+        const bool                             sum_into_values)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+
+      if (shape_info.element_type == MatrixFreeFunctions::tensor_none)
+        return integrate_tensor_none(n_components,
+                                     integration_flag,
+                                     values_dofs,
+                                     fe_eval,
+                                     sum_into_values);
+      else
+        return integrate_tensor<fe_degree, n_q_points_1d>(n_components,
+                                                          integration_flag,
+                                                          values_dofs,
+                                                          fe_eval,
+                                                          sum_into_values);
+    }
+  };
+
+
+
+  template <int dim, typename Number>
+  struct FEFaceEvaluationImplCollectFromFaceSelector
+  {
+    template <int fe_degree>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags integration_flag,
+        Number                                *values_dofs,
+        FEEvaluationData<dim, Number, true>   &fe_eval,
+        const bool                             sum_into_values)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      bool use_vectorization = true;
+
+      if (fe_eval.get_dof_access_index() ==
+            MatrixFreeFunctions::DoFInfo::dof_access_cell &&
+          fe_eval.is_interior_face() == false) // exterior faces in the ECL loop
+        use_vectorization =
+          fe_eval.get_cell_ids()[0] != numbers::invalid_unsigned_int &&
+          std::all_of(fe_eval.get_cell_ids().begin() + 1,
+                      fe_eval.get_cell_ids().end(),
+                      [&](const auto &v) {
+                        return v == fe_eval.get_cell_ids()[0] ||
+                               v == numbers::invalid_unsigned_int;
+                      });
+
+      FEFaceEvaluationImplIntegrateSelector<dim, Number>::
+        template collect_from_face<fe_degree>(n_components,
+                                              integration_flag,
+                                              values_dofs,
+                                              fe_eval,
+                                              use_vectorization,
+                                              temp,
+                                              scratch_data,
+                                              sum_into_values);
+
+      return false;
+    }
+  };
+
+
+
+  template <int dim, typename Number>
+  struct FEFaceEvaluationImplIntegrateInFaceSelector
+  {
+    template <int fe_degree, int n_q_points_1d>
+    static bool
+    run(const unsigned int                     n_components,
+        const EvaluationFlags::EvaluationFlags integration_flag,
+
+        FEEvaluationData<dim, Number, true> &fe_eval)
+    {
+      const auto &shape_info = fe_eval.get_shape_info();
+      const auto &shape_data = shape_info.data.front();
+
+      const unsigned int dofs_per_comp_face =
+        fe_degree > -1 ?
+          Utilities::pow(fe_degree + 1, dim - 1) :
+          Utilities::fixed_power<dim - 1>(shape_data.fe_degree + 1);
+
+      Number *temp         = fe_eval.get_scratch_data().begin();
+      Number *scratch_data = temp + 3 * n_components * dofs_per_comp_face;
+
+      FEFaceEvaluationImplIntegrateSelector<dim, Number>::
+        template integrate_in_face<fe_degree, n_q_points_1d>(
+          n_components, integration_flag, fe_eval, temp, scratch_data);
+
       return false;
     }
   };
@@ -2056,10 +2582,10 @@ namespace internal
                 const auto face_no = fe_eval.get_face_no(v);
 
                 grad_weight[v] =
-                  shape_data.shape_data_on_face[0][fe_degree +
-                                                   (integrate ?
-                                                      (2 - (face_no % 2)) :
-                                                      (1 + (face_no % 2)))][0];
+                  shape_data
+                    .shape_data_on_face[0][fe_degree + (integrate ?
+                                                          (2 - (face_no % 2)) :
+                                                          (1 + (face_no % 2)))];
 
                 index_array_hermite[v] =
                   &fe_eval.get_shape_info().face_to_cell_index_hermite(face_no,
@@ -2322,12 +2848,12 @@ namespace internal
             const bool vectorization_possible =
               all_faces_are_same && (sm_ptr == nullptr);
 
-            std::array<Number2_ *, n_lanes>   vector_ptrs;
-            std::array<unsigned int, n_lanes> reordered_indices;
+            std::array<Number2_ *, n_lanes>   vector_ptrs{{nullptr}};
+            std::array<unsigned int, n_lanes> reordered_indices{
+              {numbers::invalid_unsigned_int}};
 
             if (vectorization_possible == false)
               {
-                vector_ptrs = {};
                 if (n_face_orientations == 1)
                   {
                     for (unsigned int v = 0; v < n_filled_lanes; ++v)
@@ -2374,7 +2900,7 @@ namespace internal
                   }
                 else
                   {
-                    Assert(false, ExcNotImplemented());
+                    DEAL_II_NOT_IMPLEMENTED();
                   }
               }
             else if (n_face_orientations == n_lanes)
@@ -2455,29 +2981,33 @@ namespace internal
                                                     vector_ptr + ind,
                                                     dof_indices);
                     }
-                else if (n_face_orientations == 1)
-                  for (unsigned int i = 0; i < dofs_per_face; ++i)
-                    {
-                      const unsigned int ind = index_array_nodal[0][i];
-                      const unsigned int i_  = reorientate(0, i);
-
-                      for (unsigned int v = 0; v < n_filled_lanes; ++v)
-                        proc.value(temp1[i_][v], vector_ptrs[v][ind]);
-
-                      if (integrate == false)
-                        for (unsigned int v = n_filled_lanes; v < n_lanes; ++v)
-                          temp1[i_][v] = 0.0;
-                    }
                 else
                   {
-                    if (integrate == false && n_filled_lanes < n_lanes)
+                    if constexpr (n_face_orientations == 1)
                       for (unsigned int i = 0; i < dofs_per_face; ++i)
-                        temp1[i] = Number();
+                        {
+                          const unsigned int ind = index_array_nodal[0][i];
+                          const unsigned int i_  = reorientate(0, i);
 
-                    for (unsigned int v = 0; v < n_filled_lanes; ++v)
-                      for (unsigned int i = 0; i < dofs_per_face; ++i)
-                        proc.value(temp1[reorientate(v, i)][v],
-                                   vector_ptrs[v][index_array_nodal[v][i]]);
+                          for (unsigned int v = 0; v < n_filled_lanes; ++v)
+                            proc.value(temp1[i_][v], vector_ptrs[v][ind]);
+
+                          if constexpr (integrate == false)
+                            for (unsigned int v = n_filled_lanes; v < n_lanes;
+                                 ++v)
+                              temp1[i_][v] = 0.0;
+                        }
+                    else
+                      {
+                        if (integrate == false && n_filled_lanes < n_lanes)
+                          for (unsigned int i = 0; i < dofs_per_face; ++i)
+                            temp1[i] = Number();
+
+                        for (unsigned int v = 0; v < n_filled_lanes; ++v)
+                          for (unsigned int i = 0; i < dofs_per_face; ++i)
+                            proc.value(temp1[reorientate(v, i)][v],
+                                       vector_ptrs[v][index_array_nodal[v][i]]);
+                      }
                   }
               }
           }
@@ -2485,7 +3015,7 @@ namespace internal
           {
             // We should not end up here, this should be caught by
             // FEFaceEvaluationImplGatherEvaluateSelector::supports()
-            Assert(false, ExcInternalError());
+            DEAL_II_ASSERT_UNREACHABLE();
           }
         temp1 += 3 * dofs_per_face;
       }

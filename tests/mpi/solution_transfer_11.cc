@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE at
-// the top level of the deal.II distribution.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 
@@ -61,7 +60,7 @@ test()
   LinearAlgebra::distributed::Vector<double> solution;
   solution.reinit(locally_owned_dofs,
                   locally_relevant_dofs,
-                  dofh.get_communicator());
+                  dofh.get_mpi_communicator());
 
   for (unsigned int i = 0; i < solution.size(); ++i)
     if (locally_owned_dofs.is_element(i))
@@ -69,7 +68,7 @@ test()
   solution.update_ghost_values();
 
   double l1_norm = solution.l1_norm();
-  if (Utilities::MPI::this_mpi_process(dofh.get_communicator()) == 0)
+  if (Utilities::MPI::this_mpi_process(dofh.get_mpi_communicator()) == 0)
     deallog << "pre  refinement l1=" << l1_norm << std::endl;
 
   // set refine/coarsen flags manually
@@ -122,11 +121,11 @@ test()
 
   solution.reinit(locally_owned_dofs,
                   locally_relevant_dofs,
-                  dofh.get_communicator());
+                  dofh.get_mpi_communicator());
   soltrans.interpolate(solution);
 
   l1_norm = solution.l1_norm();
-  if (Utilities::MPI::this_mpi_process(dofh.get_communicator()) == 0)
+  if (Utilities::MPI::this_mpi_process(dofh.get_mpi_communicator()) == 0)
     deallog << "post refinement l1=" << l1_norm << std::endl;
 
   // make sure no processor is hanging

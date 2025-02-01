@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2004 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/mpi.h>
 
@@ -294,21 +293,25 @@ namespace PETScWrappers
     {
       (void)n;
       AssertIndexRange(locally_owned_size, n + 1);
+      // If the size of the index set can be converted to a PetscInt then every
+      // index can also be converted
+      AssertThrowIntegerConversion(static_cast<PetscInt>(n), n);
       ghosted       = true;
       ghost_indices = ghostnodes;
 
-      const std::vector<size_type> ghostindices = ghostnodes.get_index_vector();
-
-      const PetscInt *ptr =
-        (ghostindices.size() > 0 ?
-           reinterpret_cast<const PetscInt *>(ghostindices.data()) :
-           nullptr);
+      std::size_t           i = 0;
+      std::vector<PetscInt> petsc_ghost_indices(ghostnodes.n_elements());
+      for (const auto &index : ghostnodes)
+        {
+          petsc_ghost_indices[i] = static_cast<PetscInt>(index);
+          ++i;
+        }
 
       PetscErrorCode ierr = VecCreateGhost(communicator,
                                            locally_owned_size,
                                            PETSC_DETERMINE,
-                                           ghostindices.size(),
-                                           ptr,
+                                           petsc_ghost_indices.size(),
+                                           petsc_ghost_indices.data(),
                                            &vector);
       AssertThrow(ierr == 0, ExcPETScError(ierr));
 

@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2020 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2020 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Luca Heltai, Bruno Blais, Rene Gassmoeller, 2020
  */
@@ -996,7 +995,7 @@ namespace Step70
       par.arguments_for_particle_grid);
     particle_insert_tria.refine_global(par.particle_insertion_refinement);
 
-    FE_Q<spacedim>       particles_fe(1);
+    const FE_Q<spacedim> particles_fe(1);
     DoFHandler<spacedim> particles_dof_handler(particle_insert_tria);
     particles_dof_handler.distribute_dofs(particles_fe);
 
@@ -1116,7 +1115,7 @@ namespace Step70
   template <int dim, int spacedim>
   void StokesImmersedProblem<dim, spacedim>::setup_solid_particles()
   {
-    QGauss<dim> quadrature(fluid_fe->degree + 1);
+    const QGauss<dim> quadrature(fluid_fe->degree + 1);
 
     const unsigned int n_properties = 1;
     solid_particle_handler.initialize(fluid_tria,
@@ -1339,8 +1338,8 @@ namespace Step70
 
     TimerOutput::Scope t(computing_timer, "Assemble Stokes terms");
 
-    QGauss<spacedim>   quadrature_formula(fluid_fe->degree + 1);
-    FEValues<spacedim> fe_values(*fluid_fe,
+    const QGauss<spacedim> quadrature_formula(fluid_fe->degree + 1);
+    FEValues<spacedim>     fe_values(*fluid_fe,
                                  quadrature_formula,
                                  update_values | update_gradients |
                                    update_quadrature_points |

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2005 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/polynomial.h>
@@ -314,7 +313,7 @@ FE_RaviartThomasNodal<dim>::hp_vertex_dof_identities(
     return std::vector<std::pair<unsigned int, unsigned int>>();
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<std::pair<unsigned int, unsigned int>>();
     }
 }
@@ -370,7 +369,7 @@ FE_RaviartThomasNodal<dim>::hp_line_dof_identities(
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<std::pair<unsigned int, unsigned int>>();
     }
 }
@@ -416,7 +415,7 @@ FE_RaviartThomasNodal<dim>::hp_quad_dof_identities(
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<std::pair<unsigned int, unsigned int>>();
     }
 }
@@ -455,7 +454,7 @@ FE_RaviartThomasNodal<dim>::compare_for_domination(
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -678,12 +677,13 @@ FE_RaviartThomasNodal<dim>::get_prolongation_matrix(
   Assert(refinement_case != RefinementCase<dim>::no_refinement,
          ExcMessage(
            "Prolongation matrices are only available for refined cells!"));
-  AssertIndexRange(child, GeometryInfo<dim>::n_children(refinement_case));
+  AssertIndexRange(
+    child, this->reference_cell().template n_children<dim>(refinement_case));
 
   // initialization upon first request
   if (this->prolongation[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(prolongation_matrix_mutex);
 
       // if matrix got updated while waiting for the lock
       if (this->prolongation[refinement_case - 1][child].n() ==
@@ -699,7 +699,8 @@ FE_RaviartThomasNodal<dim>::get_prolongation_matrix(
           std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
             RefinementCase<dim>::isotropic_refinement);
           isotropic_matrices.back().resize(
-            GeometryInfo<dim>::n_children(RefinementCase<dim>(refinement_case)),
+            this->reference_cell().template n_children<dim>(
+              RefinementCase<dim>(refinement_case)),
             FullMatrix<double>(this->n_dofs_per_cell(),
                                this->n_dofs_per_cell()));
           FETools::compute_embedding_matrices(*this, isotropic_matrices, true);
@@ -736,12 +737,13 @@ FE_RaviartThomasNodal<dim>::get_restriction_matrix(
   Assert(refinement_case != RefinementCase<dim>::no_refinement,
          ExcMessage(
            "Restriction matrices are only available for refined cells!"));
-  AssertIndexRange(child, GeometryInfo<dim>::n_children(refinement_case));
+  AssertIndexRange(
+    child, this->reference_cell().template n_children<dim>(refinement_case));
 
   // initialization upon first request
   if (this->restriction[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(restriction_matrix_mutex);
 
       // if matrix got updated while waiting for the lock...
       if (this->restriction[refinement_case - 1][child].n() ==
@@ -757,7 +759,8 @@ FE_RaviartThomasNodal<dim>::get_restriction_matrix(
           std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
             RefinementCase<dim>::isotropic_refinement);
           isotropic_matrices.back().resize(
-            GeometryInfo<dim>::n_children(RefinementCase<dim>(refinement_case)),
+            this->reference_cell().template n_children<dim>(
+              RefinementCase<dim>(refinement_case)),
             FullMatrix<double>(this->n_dofs_per_cell(),
                                this->n_dofs_per_cell()));
           FETools::compute_projection_matrices(*this, isotropic_matrices, true);

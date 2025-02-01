@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2016 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/array_view.h>
@@ -64,22 +63,21 @@ MappingManifold<dim, spacedim>::InternalData::memory_consumption() const
 }
 
 
+
 template <int dim, int spacedim>
 void
-MappingManifold<dim, spacedim>::InternalData::initialize(
+MappingManifold<dim, spacedim>::InternalData::reinit(
   const UpdateFlags      update_flags,
-  const Quadrature<dim> &q,
-  const unsigned int     n_original_q_points)
+  const Quadrature<dim> &q)
 {
   // store the flags in the internal data object so we can access them
   // in fill_fe_*_values()
   this->update_each = update_flags;
 
-  // Store the quadrature
-  this->quad = q;
+  const unsigned int n_q_points = q.size();
 
-  // Resize the weights
-  this->vertex_weights.resize(GeometryInfo<dim>::vertices_per_cell);
+  // Store the quadrature
+  this->quad.initialize(q.get_points(), q.get_weights());
 
   // see if we need the (transformation) shape function values
   // and/or gradients and resize the necessary arrays
@@ -88,14 +86,15 @@ MappingManifold<dim, spacedim>::InternalData::initialize(
     compute_manifold_quadrature_weights(q);
 
   if (this->update_each & update_covariant_transformation)
-    covariant.resize(n_original_q_points);
+    covariant.resize(n_q_points);
 
   if (this->update_each & update_contravariant_transformation)
-    contravariant.resize(n_original_q_points);
+    contravariant.resize(n_q_points);
 
   if (this->update_each & update_volume_elements)
-    volume_elements.resize(n_original_q_points);
+    volume_elements.resize(n_q_points);
 }
+
 
 
 template <int dim, int spacedim>
@@ -105,7 +104,18 @@ MappingManifold<dim, spacedim>::InternalData::initialize_face(
   const Quadrature<dim> &q,
   const unsigned int     n_original_q_points)
 {
-  initialize(update_flags, q, n_original_q_points);
+  reinit(update_flags, q);
+
+  // Set to the size of a single quadrature object for faces, as the size set
+  // in in reinit() is for all points
+  if (this->update_each & update_covariant_transformation)
+    covariant.resize(n_original_q_points);
+
+  if (this->update_each & update_contravariant_transformation)
+    contravariant.resize(n_original_q_points);
+
+  if (this->update_each & update_volume_elements)
+    volume_elements.resize(n_original_q_points);
 
   if (dim > 1)
     {
@@ -140,6 +150,36 @@ MappingManifold<dim, spacedim>::InternalData::initialize_face(
 
 
 template <int dim, int spacedim>
+void
+MappingManifold<dim, spacedim>::InternalData::store_vertices(
+  const typename Triangulation<dim, spacedim>::cell_iterator &cell) const
+{
+  for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
+    vertices[i] = cell->vertex(i);
+  this->cell = cell;
+}
+
+
+
+template <int dim, int spacedim>
+void
+MappingManifold<dim, spacedim>::InternalData::
+  compute_manifold_quadrature_weights(const Quadrature<dim> &quad)
+{
+  cell_manifold_quadrature_weights.resize(quad.size());
+  for (unsigned int q = 0; q < quad.size(); ++q)
+    {
+      for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
+        {
+          cell_manifold_quadrature_weights[q][i] =
+            GeometryInfo<dim>::d_linear_shape_function(quad.point(q), i);
+        }
+    }
+}
+
+
+
+template <int dim, int spacedim>
 MappingManifold<dim, spacedim>::MappingManifold(
   const MappingManifold<dim, spacedim> &)
 {}
@@ -161,7 +201,7 @@ MappingManifold<dim, spacedim>::transform_real_to_unit_cell(
   const typename Triangulation<dim, spacedim>::cell_iterator &,
   const Point<spacedim> &) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return {};
 }
 
@@ -270,8 +310,7 @@ MappingManifold<dim, spacedim>::get_data(const UpdateFlags      update_flags,
 {
   std::unique_ptr<typename Mapping<dim, spacedim>::InternalDataBase> data_ptr =
     std::make_unique<InternalData>();
-  auto &data = dynamic_cast<InternalData &>(*data_ptr);
-  data.initialize(this->requires_update_flags(update_flags), q, q.size());
+  data_ptr->reinit(this->requires_update_flags(update_flags), q);
 
   return data_ptr;
 }
@@ -340,9 +379,6 @@ namespace internal
       {
         const UpdateFlags update_flags = data.update_each;
 
-        AssertDimension(data.vertices.size(),
-                        GeometryInfo<dim>::vertices_per_cell);
-
         if (update_flags & update_quadrature_points)
           {
             for (unsigned int point = 0; point < quadrature_points.size();
@@ -381,8 +417,6 @@ namespace internal
                       data.contravariant.end(),
                       DerivativeForm<1, dim, spacedim>());
 
-            AssertDimension(GeometryInfo<dim>::vertices_per_cell,
-                            data.vertices.size());
             for (unsigned int point = 0; point < n_q_points; ++point)
               {
                 // Start by figuring out how to compute the direction in
@@ -685,7 +719,7 @@ namespace internal
                           cross_product_3d(data.aux[0][i], data.aux[1][i]);
                         break;
                       default:
-                        Assert(false, ExcNotImplemented());
+                        DEAL_II_NOT_IMPLEMENTED();
                     }
               }
             else //(dim < spacedim)
@@ -732,7 +766,7 @@ namespace internal
                           }
 
                         default:
-                          Assert(false, ExcNotImplemented());
+                          DEAL_II_NOT_IMPLEMENTED();
                       }
                   }
               }
@@ -886,7 +920,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -987,7 +1021,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -1156,7 +1190,7 @@ namespace internal
               }
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
 
@@ -1195,7 +1229,7 @@ namespace internal
                 return;
               }
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
       }
     } // namespace
@@ -1229,9 +1263,7 @@ MappingManifold<dim, spacedim>::fill_fe_face_values(
     QProjector<dim>::DataSetDescriptor::face(
       ReferenceCells::get_hypercube<dim>(),
       face_no,
-      cell->face_orientation(face_no),
-      cell->face_flip(face_no),
-      cell->face_rotation(face_no),
+      cell->combined_face_orientation(face_no),
       quadrature[0].size()),
     quadrature[0],
     data,
@@ -1265,9 +1297,7 @@ MappingManifold<dim, spacedim>::fill_fe_subface_values(
       ReferenceCells::get_hypercube<dim>(),
       face_no,
       subface_no,
-      cell->face_orientation(face_no),
-      cell->face_flip(face_no),
-      cell->face_rotation(face_no),
+      cell->combined_face_orientation(face_no),
       quadrature.size(),
       cell->subface_case(face_no)),
     quadrature,
@@ -1331,7 +1361,7 @@ MappingManifold<dim, spacedim>::transform(
           input, mapping_kind, mapping_data, output);
         return;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -1380,7 +1410,7 @@ MappingManifold<dim, spacedim>::transform(
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -1403,7 +1433,7 @@ MappingManifold<dim, spacedim>::transform(
           input, mapping_kind, mapping_data, output);
         return;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 

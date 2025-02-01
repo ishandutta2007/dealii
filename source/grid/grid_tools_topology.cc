@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2023 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/bounding_box.h>
 #include <deal.II/base/floating_point_comparator.h>
@@ -518,7 +517,7 @@ namespace GridTools
     if (dim == 1)
       return 0;
     if (dim == 2 && spacedim == 3)
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
 
     std::size_t n_negative_cells = 0;
     std::size_t cell_no          = 0;
@@ -1378,7 +1377,7 @@ namespace GridTools
                                 throw ExcMeshNotOrientable();
                             }
                           else
-                            Assert(false, ExcNotImplemented());
+                            DEAL_II_NOT_IMPLEMENTED();
                         }
                     }
                 }
@@ -1445,7 +1444,7 @@ namespace GridTools
                         starting_vertex_of_edge[3]))
                 origin_vertex_of_cell = starting_vertex_of_edge[1];
               else
-                Assert(false, ExcInternalError());
+                DEAL_II_ASSERT_UNREACHABLE();
 
               break;
             }
@@ -1472,7 +1471,7 @@ namespace GridTools
             }
 
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
 
       // now rotate raw_cells[cell_index] in such a way that its orientation
@@ -1536,7 +1535,7 @@ namespace GridTools
 
           default:
             {
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
             }
         }
     }
@@ -1684,7 +1683,7 @@ namespace GridTools
     while (continue_refinement && (iter < max_iterations))
       {
         if (max_iterations != numbers::invalid_unsigned_int)
-          iter++;
+          ++iter;
         continue_refinement = false;
 
         for (const auto &cell : tria.active_cell_iterators())
@@ -1718,7 +1717,7 @@ namespace GridTools
 
     while (continue_refinement && (iter < max_iterations))
       {
-        iter++;
+        ++iter;
         continue_refinement = false;
         for (const auto &cell : tria.active_cell_iterators())
           {
@@ -1856,8 +1855,42 @@ namespace GridTools
     const Triangulation<dim, spacedim> &triangulation,
     DynamicSparsityPattern             &cell_connectivity)
   {
-    std::vector<std::vector<unsigned int>> vertex_to_cell(
-      triangulation.n_vertices());
+    // The choice of 16 or fewer neighbors here is based on empirical
+    // measurements.
+    //
+    // Vertices in a structured hexahedral mesh have 8 adjacent cells. In a
+    // structured tetrahedral mesh, about 98% of vertices have 16 neighbors or
+    // fewer. Similarly, in an unstructured tetrahedral mesh, if we count the
+    // number of neighbors each vertex has we obtain the following distribution:
+    //
+    // 3, 1
+    // 4, 728
+    // 5, 4084
+    // 6, 7614
+    // 7, 17329
+    // 8, 31145
+    // 9, 46698
+    // 10, 64193
+    // 11, 68269
+    // 12, 63574
+    // 13, 57016
+    // 14, 50476
+    // 15, 41886
+    // 16, 31820
+    // 17, 21269
+    // 18, 12217
+    // 19, 6072
+    // 20, 2527
+    // 21, 825
+    // 22, 262
+    // 23, 61
+    // 24, 12
+    // 26, 1
+    //
+    // so about 86% of vertices have 16 neighbors or fewer. Hence, we picked 16
+    // neighbors here to cover most cases without allocation.
+    std::vector<boost::container::small_vector<unsigned int, 16>>
+      vertex_to_cell(triangulation.n_vertices());
     for (const auto &cell : triangulation.active_cell_iterators())
       {
         for (const unsigned int v : cell->vertex_indices())
@@ -1867,14 +1900,20 @@ namespace GridTools
 
     cell_connectivity.reinit(triangulation.n_active_cells(),
                              triangulation.n_active_cells());
+    std::vector<types::global_dof_index> neighbors;
     for (const auto &cell : triangulation.active_cell_iterators())
       {
+        neighbors.clear();
         for (const unsigned int v : cell->vertex_indices())
-          for (unsigned int n = 0;
-               n < vertex_to_cell[cell->vertex_index(v)].size();
-               ++n)
-            cell_connectivity.add(cell->active_cell_index(),
-                                  vertex_to_cell[cell->vertex_index(v)][n]);
+          neighbors.insert(neighbors.end(),
+                           vertex_to_cell[cell->vertex_index(v)].begin(),
+                           vertex_to_cell[cell->vertex_index(v)].end());
+        std::sort(neighbors.begin(), neighbors.end());
+        cell_connectivity.add_entries(cell->active_cell_index(),
+                                      neighbors.begin(),
+                                      std::unique(neighbors.begin(),
+                                                  neighbors.end()),
+                                      true);
       }
   }
 
@@ -1886,8 +1925,8 @@ namespace GridTools
     const unsigned int                  level,
     DynamicSparsityPattern             &cell_connectivity)
   {
-    std::vector<std::vector<unsigned int>> vertex_to_cell(
-      triangulation.n_vertices());
+    std::vector<boost::container::small_vector<unsigned int, 16>>
+      vertex_to_cell(triangulation.n_vertices());
     for (typename Triangulation<dim, spacedim>::cell_iterator cell =
            triangulation.begin(level);
          cell != triangulation.end(level);
@@ -1899,17 +1938,20 @@ namespace GridTools
 
     cell_connectivity.reinit(triangulation.n_cells(level),
                              triangulation.n_cells(level));
-    for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-           triangulation.begin(level);
-         cell != triangulation.end(level);
-         ++cell)
+    std::vector<types::global_dof_index> neighbors;
+    for (const auto &cell : triangulation.cell_iterators_on_level(level))
       {
+        neighbors.clear();
         for (const unsigned int v : cell->vertex_indices())
-          for (unsigned int n = 0;
-               n < vertex_to_cell[cell->vertex_index(v)].size();
-               ++n)
-            cell_connectivity.add(cell->index(),
-                                  vertex_to_cell[cell->vertex_index(v)][n]);
+          neighbors.insert(neighbors.end(),
+                           vertex_to_cell[cell->vertex_index(v)].begin(),
+                           vertex_to_cell[cell->vertex_index(v)].end());
+        std::sort(neighbors.begin(), neighbors.end());
+        cell_connectivity.add_entries(cell->index(),
+                                      neighbors.begin(),
+                                      std::unique(neighbors.begin(),
+                                                  neighbors.end()),
+                                      true);
       }
   }
 } /* namespace GridTools */

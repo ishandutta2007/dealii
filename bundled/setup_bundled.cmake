@@ -1,17 +1,16 @@
-# ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2013, 2014 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2013 - 2014 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # Export information about bundled library locations and do the actual
@@ -29,12 +28,12 @@ option(DEAL_II_FORCE_BUNDLED_BOOST
   "Always use the bundled boost library instead of an external one."
   OFF)
 
-set(BOOST_FOLDER "${CMAKE_SOURCE_DIR}/bundled/boost-1.70.0")
+set(BOOST_FOLDER "${CMAKE_SOURCE_DIR}/bundled/boost-1.84.0")
 
 macro(feature_boost_configure_bundled)
-  set(BOOST_VERSION "1.70.0")
+  set(BOOST_VERSION "1.84.0")
   set(BOOST_VERSION_MAJOR "1")
-  set(BOOST_VERSION_MINOR "70")
+  set(BOOST_VERSION_MINOR "84")
   set(BOOST_VERSION_SUBMINOR "0")
 
   #
@@ -58,6 +57,7 @@ macro(feature_boost_configure_bundled)
   endif()
 
   enable_if_supported(DEAL_II_WARNING_FLAGS "-Wno-unused-local-typedefs")
+  enable_if_supported(DEAL_II_WARNING_FLAGS "-Wno-parentheses")
 
   list(APPEND DEAL_II_BUNDLED_INCLUDE_DIRS ${BOOST_FOLDER}/include)
 endmacro()
@@ -100,12 +100,12 @@ option(DEAL_II_FORCE_BUNDLED_TASKFLOW
   "Always use the bundled taskflow header library instead of an external one."
   OFF)
 
-set(TASKFLOW_FOLDER "${CMAKE_SOURCE_DIR}/bundled/taskflow-3.6.0")
+set(TASKFLOW_FOLDER "${CMAKE_SOURCE_DIR}/bundled/taskflow-3.10.0")
 
 macro(feature_taskflow_configure_bundled)
-  set(TASKFLOW_VERSION "3.6.0")
+  set(TASKFLOW_VERSION "3.10.0")
 
-  list(APPEND DEAL_II_BUNDLED_INCLUDE_DIRS ${TASKFLOW_FOLDER}/include)
+  list(APPEND DEAL_II_BUNDLED_INCLUDE_DIRS ${TASKFLOW_FOLDER})
 endmacro()
 
 

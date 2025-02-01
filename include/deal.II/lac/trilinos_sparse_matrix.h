@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2008 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_trilinos_sparse_matrix_h
 #  define dealii_trilinos_sparse_matrix_h
@@ -21,9 +20,9 @@
 
 #  ifdef DEAL_II_WITH_TRILINOS
 
+#    include <deal.II/base/enable_observer_pointer.h>
 #    include <deal.II/base/index_set.h>
 #    include <deal.II/base/mpi_stub.h>
-#    include <deal.II/base/subscriptor.h>
 
 #    include <deal.II/lac/exceptions.h>
 #    include <deal.II/lac/full_matrix.h>
@@ -547,7 +546,7 @@ namespace TrilinosWrappers
    * @ingroup TrilinosWrappers
    * @ingroup Matrix1
    */
-  class SparseMatrix : public Subscriptor
+  class SparseMatrix : public EnableObserverPointer
   {
   public:
     /**
@@ -666,7 +665,7 @@ namespace TrilinosWrappers
      * holds the sparsity_pattern structure because each processor sets its
      * rows.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     template <typename SparsityPatternType>
@@ -677,7 +676,7 @@ namespace TrilinosWrappers
      * This function reinitializes the Trilinos sparse matrix from a (possibly
      * distributed) Trilinos sparsity pattern.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      *
      * If you want to write to the matrix from several threads and use MPI,
@@ -693,7 +692,7 @@ namespace TrilinosWrappers
      * matrix. The values are not copied, but you can use copy_from() for
      * this.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     void
@@ -709,7 +708,7 @@ namespace TrilinosWrappers
      * sparsity structure of the input matrix should be used or the matrix
      * entries should be copied, too.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a deadlock.
      *
      * @note If a different sparsity pattern is given in the last argument
@@ -747,9 +746,9 @@ namespace TrilinosWrappers
      * actual matrix structure has more nonzero entries than specified in the
      * constructor. However it is still advantageous to provide good estimates
      * here since this will considerably increase the performance of the
-     * matrix setup. However, there is no effect in the performance of matrix-
-     * vector products, since Trilinos reorganizes the matrix memory prior to
-     * use (in the compress() step).
+     * matrix setup. However, there is no effect in the performance of
+     * matrix-vector products, since Trilinos reorganizes the matrix memory
+     * prior to use (in the compress() step).
      */
     SparseMatrix(const IndexSet    &parallel_partitioning,
                  const MPI_Comm     communicator          = MPI_COMM_WORLD,
@@ -821,7 +820,7 @@ namespace TrilinosWrappers
      * processor just sets the elements in the sparsity pattern that belong to
      * its rows.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     template <typename SparsityPatternType>
@@ -840,7 +839,7 @@ namespace TrilinosWrappers
      * only implemented for input sparsity patterns of type
      * DynamicSparsityPattern.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     template <typename SparsityPatternType>
@@ -865,7 +864,7 @@ namespace TrilinosWrappers
      * sparsity structure of the input matrix should be used or the matrix
      * entries should be copied, too.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     template <typename number>
@@ -887,7 +886,7 @@ namespace TrilinosWrappers
      * sparsity structure of the input matrix should be used or the matrix
      * entries should be copied, too.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     template <typename number>
@@ -1004,7 +1003,7 @@ namespace TrilinosWrappers
      * Release all memory and return to a state just like after having called
      * the default constructor.
      *
-     * This is a collective operation that needs to be called on all
+     * This is a @ref GlossCollectiveOperation "collective operation" that needs to be called on all
      * processors in order to avoid a dead lock.
      */
     void
@@ -1029,9 +1028,9 @@ namespace TrilinosWrappers
      * </ul>
      *
      * In both cases, this function compresses the data structures and allows
-     * the resulting matrix to be used in all other operations like matrix-
-     * vector products. This is a collective operation, i.e., it needs to be
-     * run on all processors when used in %parallel.
+     * the resulting matrix to be used in all other operations like
+     * matrix-vector products. This is a @ref GlossCollectiveOperation "collective operation", i.e., it needs to
+     * be run on all processors when used in %parallel.
      *
      * See
      * @ref GlossCompress "Compressing distributed objects"
@@ -1344,8 +1343,8 @@ namespace TrilinosWrappers
      * starting to clear rows.
      */
     void
-    clear_rows(const std::vector<size_type> &rows,
-               const TrilinosScalar          new_diag_value = 0);
+    clear_rows(const ArrayView<const size_type> &rows,
+               const TrilinosScalar              new_diag_value = 0);
 
     /**
      * Sets an internal flag so that all operations performed by the matrix,
@@ -1575,10 +1574,9 @@ namespace TrilinosWrappers
      * running on one processor, since the matrix object is inherently
      * distributed. Otherwise, an exception will be thrown.
      */
+    template <typename VectorType>
     TrilinosScalar
-    residual(MPI::Vector       &dst,
-             const MPI::Vector &x,
-             const MPI::Vector &b) const;
+    residual(VectorType &dst, const VectorType &x, const VectorType &b) const;
 
     /**
      * Perform the matrix-matrix multiplication <tt>C = A * B</tt>, or, if an
@@ -1712,9 +1710,9 @@ namespace TrilinosWrappers
      * that all elements of one row are accessed before the elements of the
      * next row. If your algorithm relies on visiting elements within one row,
      * you will need to consult with the Trilinos documentation on the order
-     * in which it stores data. It is, however, generally not a good and long-
-     * term stable idea to rely on the order in which receive elements if you
-     * iterate over them.
+     * in which it stores data. It is, however, generally not a good and
+     * long-term stable idea to rely on the order in which receive elements if
+     * you iterate over them.
      *
      * When you iterate over the elements of a parallel matrix, you will only
      * be able to access the locally owned rows. (You can access the other
@@ -1758,9 +1756,9 @@ namespace TrilinosWrappers
      * that all elements of one row are accessed before the elements of the
      * next row. If your algorithm relies on visiting elements within one row,
      * you will need to consult with the Trilinos documentation on the order
-     * in which it stores data. It is, however, generally not a good and long-
-     * term stable idea to rely on the order in which receive elements if you
-     * iterate over them.
+     * in which it stores data. It is, however, generally not a good and
+     * long-term stable idea to rely on the order in which receive elements if
+     * you iterate over them.
      *
      * @note When you access the elements of a parallel matrix, you can only
      * access the elements of rows that are actually stored locally. (You can
@@ -1908,29 +1906,6 @@ namespace TrilinosWrappers
 
 
   protected:
-    /**
-     * For some matrix storage formats, in particular for the PETSc
-     * distributed blockmatrices, set and add operations on individual
-     * elements can not be freely mixed. Rather, one has to synchronize
-     * operations when one wants to switch from setting elements to adding to
-     * elements.  BlockMatrixBase automatically synchronizes the access by
-     * calling this helper function for each block.  This function ensures
-     * that the matrix is in a state that allows adding elements; if it
-     * previously already was in this state, the function does nothing.
-     */
-    void
-    prepare_add();
-
-    /**
-     * Same as prepare_add() but prepare the matrix for setting elements if
-     * the representation of elements in this class requires such an
-     * operation.
-     */
-    void
-    prepare_set();
-
-
-
   private:
     /**
      * Pointer to the user-supplied Epetra Trilinos mapping of the matrix
@@ -1946,8 +1921,8 @@ namespace TrilinosWrappers
     std::unique_ptr<Epetra_FECrsMatrix> matrix;
 
     /**
-     * A sparse matrix object in Trilinos to be used for collecting the non-
-     * local elements if the matrix was constructed from a Trilinos sparsity
+     * A sparse matrix object in Trilinos to be used for collecting the
+     * non-local elements if the matrix was constructed from a Trilinos sparsity
      * pattern with the respective option.
      */
     std::unique_ptr<Epetra_CrsMatrix> nonlocal_matrix;
@@ -1975,6 +1950,31 @@ namespace TrilinosWrappers
      * compressed or not.
      */
     bool compressed;
+
+    /**
+     * For some matrix storage formats, in particular for the PETSc
+     * distributed blockmatrices, set and add operations on individual
+     * elements can not be freely mixed. Rather, one has to synchronize
+     * operations when one wants to switch from setting elements to adding to
+     * elements.  BlockMatrixBase automatically synchronizes the access by
+     * calling this helper function for each block.  This function ensures
+     * that the matrix is in a state that allows adding elements; if it
+     * previously already was in this state, the function does nothing.
+     *
+     * This function is called from BlockMatrixBase.
+     */
+    void
+    prepare_add();
+
+    /**
+     * Same as prepare_add() but prepare the matrix for setting elements if
+     * the representation of elements in this class requires such an
+     * operation.
+     *
+     * This function is called from BlockMatrixBase.
+     */
+    void
+    prepare_set();
 
     // To allow calling protected prepare_add() and prepare_set().
     friend class BlockMatrixBase<SparseMatrix>;
@@ -2044,6 +2044,7 @@ namespace TrilinosWrappers
       (void)dst;
     }
 
+
     namespace LinearOperatorImplementation
     {
       /**
@@ -2082,6 +2083,11 @@ namespace TrilinosWrappers
          * Definition for the vector type for the range space of the operator.
          */
         using Domain = VectorType;
+
+        /**
+         * Index of the referenced element of the vector.
+         */
+        using size_type = dealii::types::global_dof_index;
 
         /**
          * @name Constructors / destructor
@@ -2454,7 +2460,7 @@ namespace TrilinosWrappers
         /**
          * Return a flag that describes whether this operator can return the
          * computation of the infinity norm. Since in general this is not the
-         * case, this always returns a negetive result.
+         * case, this always returns a negative result.
          *
          * This overloads the same function from the Trilinos class
          * Epetra_Operator.
@@ -3111,6 +3117,21 @@ namespace TrilinosWrappers
   SparseMatrix::prepare_set()
   {
     // nothing to do here
+  }
+
+
+
+  template <typename VectorType>
+  inline TrilinosScalar
+  SparseMatrix::residual(VectorType       &dst,
+                         const VectorType &x,
+                         const VectorType &b) const
+  {
+    vmult(dst, x);
+    dst -= b;
+    dst *= -1.;
+
+    return dst.l2_norm();
   }
 
 

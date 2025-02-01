@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2012 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2012 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Joerg Frohne, Texas A&M University and
  *                        University of Siegen, 2012, 2013
@@ -62,7 +61,6 @@
 #include <deal.II/fe/fe_values.h>
 
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/numerics/fe_field_function.h>
@@ -178,7 +176,7 @@ namespace Step42
   // strain to the stress according to the projection given above,
   // when evaluated at a particular strain point. We need this
   // function to calculate the nonlinear residual in
-  // <code>PlasticityContactProblem::residual_nl_system()</code> where
+  // <code>PlasticityContactProblem::compute_nonlinear_residual()</code> where
   // we multiply this tensor with the strain given in a quadrature
   // point. The computations follow the formulas laid out in the
   // introduction. In comparing the formulas there with the
@@ -226,8 +224,9 @@ namespace Step42
   // linearization point. The function returns the derivative of the nonlinear
   // constitutive law in the variable stress_strain_tensor, as well as the
   // stress-strain tensor of the linearized problem in
-  // stress_strain_tensor_linearized.  See
-  // PlasticityContactProblem::assemble_nl_system where this function is used.
+  // stress_strain_tensor_linearized. See
+  // `PlasticityContactProblem::assemble_newton_system()` where this function
+  // is used.
   template <int dim>
   void ConstitutiveLaw<dim>::get_linearized_stress_strain_tensors(
     const SymmetricTensor<2, dim> &strain_tensor,
@@ -261,7 +260,7 @@ namespace Step42
     stress_strain_tensor_linearized += stress_strain_tensor_kappa;
   }
 
-  // <h3>Equation data: boundary forces, boundary values, obstacles</h3>
+  // @sect3{Equation data: boundary forces, boundary values, obstacles}
   //
   // The following should be relatively standard. We need classes for
   // the boundary forcing term (which we here choose to be zero)
@@ -371,20 +370,20 @@ namespace Step42
                                       const unsigned int component) const
     {
       if (component == 0)
-        return p(0);
+        return p[0];
       else if (component == 1)
-        return p(1);
+        return p[1];
       else if (component == 2)
         {
-          if ((p(0) - 0.5) * (p(0) - 0.5) + (p(1) - 0.5) * (p(1) - 0.5) < 0.36)
-            return (-std::sqrt(0.36 - (p(0) - 0.5) * (p(0) - 0.5) -
-                               (p(1) - 0.5) * (p(1) - 0.5)) +
+          if ((p[0] - 0.5) * (p[0] - 0.5) + (p[1] - 0.5) * (p[1] - 0.5) < 0.36)
+            return (-std::sqrt(0.36 - (p[0] - 0.5) * (p[0] - 0.5) -
+                               (p[1] - 0.5) * (p[1] - 0.5)) +
                     z_surface + 0.59);
           else
             return 1000;
         }
 
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return 1e9; // an unreasonable value; ignored in debug mode because of the
                   // preceding Assert
     }
@@ -448,9 +447,7 @@ namespace Step42
       , ny(0)
     {
       std::ifstream f(name);
-      AssertThrow(f,
-                  ExcMessage(std::string("Can't read from file <") + name +
-                             ">!"));
+      AssertThrow(f, ExcMessage("Can't read from file <" + name + ">!"));
 
       std::string temp;
       f >> temp >> nx >> ny;
@@ -549,16 +546,16 @@ namespace Step42
                                        const unsigned int component) const
     {
       if (component == 0)
-        return p(0);
+        return p[0];
       if (component == 1)
-        return p(1);
+        return p[1];
       else if (component == 2)
         {
-          if (p(0) >= 0.0 && p(0) <= 1.0 && p(1) >= 0.0 && p(1) <= 1.0)
-            return z_surface + 0.999 - input_obstacle.get_value(p(0), p(1));
+          if (p[0] >= 0.0 && p[0] <= 1.0 && p[1] >= 0.0 && p[1] <= 1.0)
+            return z_surface + 0.999 - input_obstacle.get_value(p[0], p[1]);
         }
 
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return 1e9; // an unreasonable value; ignored in debug mode because of the
                   // preceding Assert
     }
@@ -636,7 +633,7 @@ namespace Step42
     // In particular, for this parallel program, the finite element
     // space has associated with it variables that indicate which degrees
     // of freedom live on the current processor (the index sets, see
-    // also step-40 and the @ref distributed documentation module) as
+    // also step-40 and the @ref distributed documentation topic) as
     // well as a variety of constraints: those imposed by hanging nodes,
     // by Dirichlet boundary conditions, and by the active set of
     // contact nodes. Of the three AffineConstraints variables defined
@@ -660,9 +657,9 @@ namespace Step42
     const unsigned int                        n_initial_global_refinements;
     parallel::distributed::Triangulation<dim> triangulation;
 
-    const unsigned int fe_degree;
-    FESystem<dim>      fe;
-    DoFHandler<dim>    dof_handler;
+    const unsigned int  fe_degree;
+    const FESystem<dim> fe;
+    DoFHandler<dim>     dof_handler;
 
     IndexSet locally_owned_dofs;
     IndexSet locally_relevant_dofs;
@@ -880,7 +877,7 @@ namespace Step42
   // indicator one.
   Point<3> rotate_half_sphere(const Point<3> &in)
   {
-    return {in(2), in(1), -in(0)};
+    return {in[2], in[1], -in[0]};
   }
 
   template <int dim>
@@ -1123,7 +1120,7 @@ namespace Step42
   void PlasticityContactProblem<dim>::assemble_mass_matrix_diagonal(
     TrilinosWrappers::SparseMatrix &mass_matrix)
   {
-    QGaussLobatto<dim - 1> face_quadrature_formula(fe.degree + 1);
+    const QGaussLobatto<dim - 1> face_quadrature_formula(fe.degree + 1);
 
     FEFaceValues<dim> fe_values_face(fe,
                                      face_quadrature_formula,
@@ -1216,8 +1213,9 @@ namespace Step42
     // many quadrature points as there are shape functions per face and
     // looping over quadrature points is equivalent to looping over shape
     // functions defined on a face. With this, the code looks as follows:
-    Quadrature<dim - 1> face_quadrature(fe.get_unit_face_support_points());
-    FEFaceValues<dim>   fe_values_face(fe,
+    const Quadrature<dim - 1> face_quadrature(
+      fe.get_unit_face_support_points());
+    FEFaceValues<dim> fe_values_face(fe,
                                      face_quadrature,
                                      update_quadrature_points);
 
@@ -1239,7 +1237,7 @@ namespace Step42
                 {
                   // At each quadrature point (i.e., at each support point of a
                   // degree of freedom located on the contact boundary), we then
-                  // ask whether it is part of the z-displacement degrees of
+                  // ask whether it is part of the $z$-displacement degrees of
                   // freedom and if we haven't encountered this degree of
                   // freedom yet (which can happen for those on the edges
                   // between faces), we need to evaluate the gap between the
@@ -1250,12 +1248,12 @@ namespace Step42
                   // to the correct value, and add the index to the IndexSet
                   // object that stores which degree of freedom is part of the
                   // contact:
-                  const unsigned int component =
-                    fe.face_system_to_component_index(q_point).first;
+                  const FEValuesExtractors::Scalar z_displacement(2);
 
                   const unsigned int index_z = dof_indices[q_point];
 
-                  if ((component == 2) && (dof_touched[index_z] == false))
+                  if (fe.shape_function_belongs_to(q_point, z_displacement) &&
+                      (dof_touched[index_z] == false))
                     {
                       dof_touched[index_z] = true;
 
@@ -1266,7 +1264,7 @@ namespace Step42
                         obstacle->value(this_support_point, 2);
                       const double solution_here = solution(index_z);
                       const double undeformed_gap =
-                        obstacle_value - this_support_point(2);
+                        obstacle_value - this_support_point[2];
 
                       const double c = 100.0 * e_modulus;
                       if ((lambda(index_z) /
@@ -1326,8 +1324,8 @@ namespace Step42
   {
     TimerOutput::Scope t(computing_timer, "Assembling");
 
-    QGauss<dim>     quadrature_formula(fe.degree + 1);
-    QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
+    const QGauss<dim>     quadrature_formula(fe.degree + 1);
+    const QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
 
     FEValues<dim> fe_values(fe,
                             quadrature_formula,
@@ -1479,8 +1477,8 @@ namespace Step42
   void PlasticityContactProblem<dim>::compute_nonlinear_residual(
     const TrilinosWrappers::MPI::Vector &linearization_point)
   {
-    QGauss<dim>     quadrature_formula(fe.degree + 1);
-    QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
+    const QGauss<dim>     quadrature_formula(fe.degree + 1);
+    const QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
 
     FEValues<dim> fe_values(fe,
                             quadrature_formula,
@@ -1622,10 +1620,8 @@ namespace Step42
     {
       TimerOutput::Scope t(computing_timer, "Solve: setup preconditioner");
 
-      std::vector<std::vector<bool>> constant_modes;
-      DoFTools::extract_constant_modes(dof_handler,
-                                       ComponentMask(),
-                                       constant_modes);
+      const std::vector<std::vector<bool>> constant_modes =
+        DoFTools::extract_constant_modes(dof_handler);
 
       TrilinosWrappers::PreconditionAMG::AdditionalData additional_data;
       additional_data.constant_modes        = constant_modes;
@@ -2078,8 +2074,8 @@ namespace Step42
 
     double contact_force = 0.0;
 
-    QGauss<dim - 1>   face_quadrature_formula(fe.degree + 1);
-    FEFaceValues<dim> fe_values_face(fe,
+    const QGauss<dim - 1> face_quadrature_formula(fe.degree + 1);
+    FEFaceValues<dim>     fe_values_face(fe,
                                      face_quadrature_formula,
                                      update_values | update_JxW_values);
 

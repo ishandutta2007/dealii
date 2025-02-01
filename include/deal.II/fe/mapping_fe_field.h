@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2015 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_mapping_fe_field_h
 #define dealii_mapping_fe_field_h
@@ -171,7 +170,12 @@ public:
    * that was passed at construction time.
    */
   virtual boost::container::small_vector<Point<spacedim>,
-                                         GeometryInfo<dim>::vertices_per_cell>
+#ifndef _MSC_VER
+                                         ReferenceCells::max_n_vertices<dim>()
+#else
+                                         GeometryInfo<dim>::vertices_per_cell
+#endif
+                                         >
   get_vertices(const typename Triangulation<dim, spacedim>::cell_iterator &cell)
     const override;
 
@@ -290,6 +294,11 @@ public:
     InternalData(const FiniteElement<dim, spacedim> &fe,
                  const ComponentMask                &mask);
 
+    // Documentation see Mapping::InternalDataBase.
+    virtual void
+    reinit(const UpdateFlags      update_flags,
+           const Quadrature<dim> &quadrature) override;
+
     /**
      * Shape function at quadrature point. Shape functions are in tensor
      * product order, so vertices must be reordered to obtain transformation.
@@ -359,6 +368,11 @@ public:
      */
     virtual std::size_t
     memory_consumption() const override;
+
+    /**
+     * A pointer to the underlying finite element.
+     */
+    ObserverPointer<const FiniteElement<dim, spacedim>> fe;
 
     /**
      * Values of shape functions. Access by function @p shape.
@@ -561,15 +575,15 @@ protected:
   /**
    * Reference to the vector of shifts.
    */
-  std::vector<
-    SmartPointer<const VectorType, MappingFEField<dim, spacedim, VectorType>>>
+  std::vector<ObserverPointer<const VectorType,
+                              MappingFEField<dim, spacedim, VectorType>>>
     euler_vector;
 
   /**
    * Pointer to the DoFHandler to which the mapping vector is associated.
    */
-  SmartPointer<const DoFHandler<dim, spacedim>,
-               MappingFEField<dim, spacedim, VectorType>>
+  ObserverPointer<const DoFHandler<dim, spacedim>,
+                  MappingFEField<dim, spacedim, VectorType>>
     euler_dof_handler;
 
 private:
@@ -591,18 +605,17 @@ private:
   Point<spacedim>
   do_transform_unit_to_real_cell(const InternalData &mdata) const;
 
-
   /**
    * Transform the point @p p on the real cell to the corresponding point on
-   * the unit cell @p cell by a Newton iteration.
+   * the unit cell @p cell by a Newton iteration. @p starting_guess is
+   * a guess for the position on the unit cell at which this function will
+   * start its Newton iteration.
    *
    * Takes a reference to an @p InternalData that is assumed to be previously
    * created by the @p get_data function with @p UpdateFlags including @p
    * update_transformation_values and @p update_transformation_gradients and a
-   * one point Quadrature that includes the given initial guess for the
-   * transformation @p initial_p_unit.  Hence this function assumes that @p
-   * mdata already includes the transformation shape values and gradients
-   * computed at @p initial_p_unit.
+   * one point Quadrature that includes the given initial guess specified
+   * through the given @p starting_guess.
    *
    * @p mdata will be changed by this function.
    */
@@ -610,7 +623,7 @@ private:
   do_transform_real_to_unit_cell(
     const typename Triangulation<dim, spacedim>::cell_iterator &cell,
     const Point<spacedim>                                      &p,
-    const Point<dim>                                           &initial_p_unit,
+    const Point<dim>                                           &starting_guess,
     InternalData                                               &mdata) const;
 
   /**
@@ -621,15 +634,6 @@ private:
     const typename Triangulation<dim, spacedim>::cell_iterator &cell,
     const typename MappingFEField<dim, spacedim, VectorType>::InternalData
       &data) const;
-
-  /**
-   * See the documentation of the base class for detailed information.
-   */
-  virtual void
-  compute_shapes_virtual(
-    const std::vector<Point<dim>> &unit_points,
-    typename MappingFEField<dim, spacedim, VectorType>::InternalData &data)
-    const;
 
   /*
    * Which components to use for the mapping.
@@ -659,17 +663,8 @@ private:
   mutable Threads::Mutex fe_values_mutex;
 
   void
-  compute_data(const UpdateFlags      update_flags,
-               const Quadrature<dim> &q,
-               const unsigned int     n_original_q_points,
-               InternalData          &data) const;
-
-  void
-  compute_face_data(const UpdateFlags      update_flags,
-                    const Quadrature<dim> &q,
-                    const unsigned int     n_original_q_points,
-                    InternalData          &data) const;
-
+  compute_face_data(const unsigned int n_original_q_points,
+                    InternalData      &data) const;
 
   // Declare other MappingFEField classes friends.
   template <int, int, class>

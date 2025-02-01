@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
+## SPDX-License-Identifier: LGPL-2.1-or-later
 ## Copyright (C) 2012 - 2023 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 ########################################################################
 #                                                                      #
@@ -407,4 +406,20 @@ if(NOT CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
   endif()
 
   reset_cmake_required()
+endif()
+
+
+#
+# Check whether the compiler supports interprocedural and link-time
+# optimization. If so, we can set the corresponding property on the
+# compile and link targets later on.
+#
+if(DEAL_II_USE_LTO)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT _res OUTPUT _out LANGUAGES CXX)
+  if (_res)
+    message(STATUS "Compiler supports interprocedural/link-time optimizations")
+  else()
+    message(FATAL_ERROR "You asked for interprocedural/link-time optimizations, but the compiler does not support these optimizations: ${_out}")
+  endif()
 endif()

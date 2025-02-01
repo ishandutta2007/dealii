@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2023 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  *
  * Authors: Magdalena Schreter-Fleischhacker, Technical University of
@@ -31,6 +30,7 @@
 #include <deal.II/distributed/tria.h>
 
 #include <deal.II/dofs/dof_renumbering.h>
+#include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_q.h>
@@ -80,10 +80,10 @@ namespace Step87
 // triangulation is 1D, e.g., in the case of codim-1 meshes.
 #ifdef DEAL_II_WITH_P4EST
   template <int dim, int spacedim = dim>
-  using DistributedTriangulation = typename std::conditional<
+  using DistributedTriangulation = typename std::conditional_t<
     dim == 1,
     parallel::shared::Triangulation<dim, spacedim>,
-    parallel::distributed::Triangulation<dim, spacedim>>::type;
+    parallel::distributed::Triangulation<dim, spacedim>>;
 #else
   template <int dim, int spacedim = dim>
   using DistributedTriangulation =
@@ -161,11 +161,11 @@ namespace Step87
     constexpr unsigned int dim       = 2;
     constexpr unsigned int fe_degree = 3;
 
-    MappingQ1<dim>     mapping;
-    Triangulation<dim> tria;
+    const MappingQ1<dim> mapping;
+    Triangulation<dim>   tria;
     GridGenerator::subdivided_hyper_cube(tria, 7);
 
-    FE_Q<dim>       fe(fe_degree);
+    const FE_Q<dim> fe(fe_degree);
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
@@ -299,11 +299,11 @@ namespace Step87
 
     pcout << "Running: example 1" << std::endl;
 
-    MappingQ1<dim>                mapping;
+    const MappingQ1<dim>          mapping;
     DistributedTriangulation<dim> tria(MPI_COMM_WORLD);
     GridGenerator::subdivided_hyper_cube(tria, 7);
 
-    FE_Q<dim>       fe(fe_degree);
+    const FE_Q<dim> fe(fe_degree);
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
@@ -465,8 +465,8 @@ namespace Step87
     pcout << "Running: example 2" << std::endl;
     pcout << "  - create system" << std::endl;
 
-    FE_Q<dim>                     fe(fe_degree);
-    MappingQ1<dim>                mapping;
+    const FE_Q<dim>               fe(fe_degree);
+    const MappingQ1<dim>          mapping;
     DistributedTriangulation<dim> tria(MPI_COMM_WORLD);
     GridGenerator::subdivided_hyper_cube(tria, 50);
 
@@ -736,9 +736,9 @@ namespace Step87
     GridGenerator::hyper_cube(tria_background);
     tria_background.refine_global(5);
 
-    MappingQ1<dim>  mapping_background;
-    FESystem<dim>   fe_background(FE_Q<dim>(degree), dim);
-    DoFHandler<dim> dof_handler_background(tria_background);
+    const MappingQ1<dim> mapping_background;
+    const FESystem<dim>  fe_background(FE_Q<dim>(degree), dim);
+    DoFHandler<dim>      dof_handler_background(tria_background);
     dof_handler_background.distribute_dofs(fe_background);
 
     // and, similarly, for the immersed surface mesh.
@@ -758,14 +758,14 @@ namespace Step87
     // that is updated in every time step according to the nodal
     // displacements. Two types of finite elements are used to
     // represent scalar and vector-valued DoF values.
-    MappingQ<dim - 1, dim>      mapping_immersed_base(3);
-    MappingQCache<dim - 1, dim> mapping_immersed(3);
+    const MappingQ<dim - 1, dim> mapping_immersed_base(3);
+    MappingQCache<dim - 1, dim>  mapping_immersed(3);
     mapping_immersed.initialize(mapping_immersed_base, tria_immersed);
-    QGauss<dim - 1> quadrature_immersed(degree + 1);
+    const QGauss<dim - 1> quadrature_immersed(degree + 1);
 
-    FE_Q<dim - 1, dim>       fe_scalar_immersed(degree);
-    FESystem<dim - 1, dim>   fe_immersed(fe_scalar_immersed, dim);
-    DoFHandler<dim - 1, dim> dof_handler_immersed(tria_immersed);
+    const FE_Q<dim - 1, dim>     fe_scalar_immersed(degree);
+    const FESystem<dim - 1, dim> fe_immersed(fe_scalar_immersed, dim);
+    DoFHandler<dim - 1, dim>     dof_handler_immersed(tria_immersed);
     dof_handler_immersed.distribute_dofs(fe_immersed);
 
     // We renumber the DoFs related to the vector-valued problem to
@@ -831,6 +831,7 @@ namespace Step87
               VectorTools::point_values<dim>(rpe,
                                              dof_handler_background,
                                              velocity);
+            velocity.zero_out_ghost_values();
 
             for (unsigned int i = 0, c = 0;
                  i < immersed_support_points.locally_owned_size() / dim;
@@ -866,7 +867,7 @@ namespace Step87
         // =
         // \sum_i\text{tr}\left({\nabla \boldsymbol{N}_i (\boldsymbol{x}_q)
         // \boldsymbol n_i}\right)
-        // \;\text{with}\; i\in[0,n_{\text{dofs_per_cell}}),
+        // \;\text{with}\; i\in[0,n_{\text{dofs\_per\_cell}}),
         // @f]
         // which we can apply since the immersed mesh is consistently
         // orientated. The surface tension coefficient is set to 1 for the
@@ -1013,9 +1014,9 @@ namespace Step87
                 dim, DataComponentInterpretation::component_is_part_of_vector);
             pcout << "  - write data (background mesh)" << std::endl;
             DataOut<dim>          data_out_background;
-            DataOutBase::VtkFlags flags_backround;
-            flags_backround.write_higher_order_cells = true;
-            data_out_background.set_flags(flags_backround);
+            DataOutBase::VtkFlags flags_background;
+            flags_background.write_higher_order_cells = true;
+            data_out_background.set_flags(flags_background);
             data_out_background.add_data_vector(
               dof_handler_background,
               force_vector,
@@ -1105,7 +1106,7 @@ namespace Step87
   {
     support_points.reinit(dof_handler.locally_owned_dofs(),
                           DoFTools::extract_locally_active_dofs(dof_handler),
-                          dof_handler.get_communicator());
+                          dof_handler.get_mpi_communicator());
 
     const auto &fe = dof_handler.get_fe();
 

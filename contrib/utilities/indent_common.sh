@@ -1,18 +1,17 @@
 #!/bin/bash
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2018 - 2022 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2018 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE at
-## the top level of the deal.II distribution.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # This file contains a number of common functions used all indent scripts
@@ -84,9 +83,9 @@ checks() {
   git log --since "2019-01-01" --format="%aN" --no-merges | sort -u | while read name ; do
       words=($name)
       if [ "${#words[@]}" -lt "2" -a "$name" != "dependabot[bot]" ]; then
-	  echo "invalid author '$name' without firstname and lastname"
+	  echo "Invalid author '$name' without firstname and lastname"
 	  echo ""
-	  echo "hint: for possible solutions, consult the webpage:"
+	  echo "For possible solutions, consult the following page:"
 	  echo "      https://github.com/dealii/dealii/wiki/Commit-authorship"
 	  exit 2
       fi
@@ -326,24 +325,10 @@ process_changed()
 #
 ensure_single_trailing_newline()
 {
-  f=$1
+  file="${1}"
 
-  # Remove newlines at end of file
-  # Check that the current line only contains newlines
-  # If it doesn't match, print it
-  # If it does match and we're not at the end of the file,
-  # append the next line to the current line and repeat the check
-  # If it does match and we're at the end of the file,
-  # remove the line.
-  sed -e :a -e '/^\n*$/{$d;N;};/\n$/ba' $f >$f.tmpi
-
-  # Then add a newline to the end of the file
-  # '$' denotes the end of file
-  # 'a\' appends the following text (which in this case is nothing)
-  # on a new line
-  sed -e '$a\' $f.tmpi >$f.tmp
-
-  diff -q $f $f.tmp >/dev/null || mv $f.tmp $f
-  rm -f $f.tmp $f.tmpi
+  if test $(tail -c1 "$file") ; then
+    echo '' >> "$file"
+  fi
 }
 export -f ensure_single_trailing_newline

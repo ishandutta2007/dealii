@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2016 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_vector_operations_internal_h
@@ -211,14 +210,9 @@ namespace internal
         Assert(end >= begin, ExcInternalError());
 
         if (value == Number())
-          {
-            if constexpr (std::is_trivial_v<Number>)
-              {
-                std::memset(dst + begin, 0, sizeof(Number) * (end - begin));
-                return;
-              }
-          }
-        std::fill(dst + begin, dst + end, value);
+          std::fill(dst + begin, dst + end, Number());
+        else
+          std::fill(dst + begin, dst + end, value);
       }
 
       const Number  value;
@@ -2011,10 +2005,15 @@ namespace internal
              real_type      &sum,
              ::dealii::MemorySpace::MemorySpaceData<Number,
                                                     ::dealii::MemorySpace::Host>
-               &data)
+                            &data,
+             const size_type optional_offset = 0)
       {
         Norm1<Number, real_type> norm1(data.values.data());
-        parallel_reduce(norm1, 0, size, sum, thread_loop_partitioner);
+        parallel_reduce(norm1,
+                        optional_offset,
+                        optional_offset + size,
+                        sum,
+                        thread_loop_partitioner);
       }
 
       template <typename real_type>
@@ -2508,7 +2507,8 @@ namespace internal
         real_type      &sum,
         ::dealii::MemorySpace::MemorySpaceData<Number,
                                                ::dealii::MemorySpace::Default>
-          &data)
+                       &data,
+        const size_type optional_offset = 0)
       {
         auto exec = typename ::dealii::MemorySpace::Default::kokkos_space::
           execution_space{};
@@ -2516,7 +2516,7 @@ namespace internal
           "dealii::norm_1",
           Kokkos::RangePolicy<
             ::dealii::MemorySpace::Default::kokkos_space::execution_space>(
-            exec, 0, size),
+            exec, optional_offset, optional_offset + size),
           KOKKOS_LAMBDA(size_type i, Number & update) {
 #if KOKKOS_VERSION < 30400
             update += std::abs(data.values(i));

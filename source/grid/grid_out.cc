@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1999 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/geometry_info.h>
@@ -231,9 +230,9 @@ namespace GridOutFlags
   void
   EpsFlagsBase::parse_parameters(ParameterHandler &param)
   {
-    if (param.get("Size by") == std::string("width"))
+    if (param.get("Size by") == "width")
       size_type = width;
-    else if (param.get("Size by") == std::string("height"))
+    else if (param.get("Size by") == "height")
       size_type = height;
     size                     = param.get_integer("Size");
     line_width               = param.get_double("Line width");
@@ -345,7 +344,7 @@ namespace GridOutFlags
     param.declare_entry("Azimuth",
                         "30",
                         Patterns::Double(),
-                        "Azimuth of the viw point, that is, the angle "
+                        "Azimuth of the view point, that is, the angle "
                         "in the plane from the x-axis.");
     param.declare_entry("Elevation",
                         "30",
@@ -583,7 +582,7 @@ GridOut::default_suffix(const OutputFormat output_format)
       case vtu:
         return ".vtu";
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return "";
     }
 }
@@ -758,21 +757,21 @@ template <>
 void
 GridOut::write_dx(const Triangulation<1> &, std::ostream &) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 template <>
 void
 GridOut::write_dx(const Triangulation<1, 2> &, std::ostream &) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 template <>
 void
 GridOut::write_dx(const Triangulation<1, 3> &, std::ostream &) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -1096,7 +1095,7 @@ GridOut::write_msh(const Triangulation<dim, spacedim> &tria,
           else if (cell->reference_cell() == ReferenceCells::get_simplex<dim>())
             out << cell->vertex_index(vertex) + 1 << ' ';
           else
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
       out << '\n';
     }
@@ -1195,7 +1194,7 @@ GridOut::write_ucd(const Triangulation<dim, spacedim> &tria,
             out << "hex     ";
             break;
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
 
       // it follows a list of the
@@ -1245,7 +1244,7 @@ GridOut::write_xfig(const Triangulation<dim, spacedim> &,
                     std::ostream &,
                     const Mapping<dim, spacedim> *) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -1353,7 +1352,7 @@ GridOut::write_xfig(const Triangulation<2> &tria,
             out << cell->level_subdomain_id() + 32;
             break;
           default:
-            Assert(false, ExcInternalError());
+            DEAL_II_ASSERT_UNREACHABLE();
         }
 
       // Depth, unused, fill
@@ -1377,8 +1376,8 @@ GridOut::write_xfig(const Triangulation<2> &tria,
             cell->vertex(GeometryInfo<dim>::ucd_to_deal[k % nv]);
           for (unsigned int d = 0; d < static_cast<unsigned int>(dim); ++d)
             {
-              int val = static_cast<int>(1200 * xfig_flags.scaling(d) *
-                                         (p(d) - xfig_flags.offset(d)));
+              int val = static_cast<int>(1200 * xfig_flags.scaling[d] *
+                                         (p[d] - xfig_flags.offset[d]));
               out << '\t' << ((d == 0) ? val : -val);
             }
           out << std::endl;
@@ -1423,8 +1422,8 @@ GridOut::write_xfig(const Triangulation<2> &tria,
                          ++d)
                       {
                         int val =
-                          static_cast<int>(1200 * xfig_flags.scaling(d) *
-                                           (p(d) - xfig_flags.offset(d)));
+                          static_cast<int>(1200 * xfig_flags.scaling[d] *
+                                           (p[d] - xfig_flags.offset[d]));
                         out << '\t' << ((d == 0) ? val : -val);
                       }
                     out << std::endl;
@@ -2140,7 +2139,13 @@ GridOut::write_svg(const Triangulation<2, 2> &tria, std::ostream &out) const
           double h;
 
           if (n != 1)
-            h = .6 - (index / (n - 1.)) * .6;
+            {
+              // The assert is a workaround for a compiler bug in ROCm 5.7 which
+              // evaluated index/(n-1) when n == 1 in debug mode. When adding
+              // the assert the ratio is not evaluated.
+              Assert((n - 1.) != 0., ExcInvalidState());
+              h = .6 - (index / (n - 1.)) * .6;
+            }
           else
             h = .6;
 
@@ -2213,7 +2218,7 @@ GridOut::write_svg(const Triangulation<2, 2> &tria, std::ostream &out) const
               << "stroke:rgb(25,25,25); stroke-width:"
               << svg_flags.line_thickness << '}' << '\n';
 
-          labeling_index++;
+          ++labeling_index;
         }
     }
 
@@ -2455,9 +2460,9 @@ GridOut::write_svg(const Triangulation<2, 2> &tria, std::ostream &out) const
                 }
 
               const double distance_to_camera =
-                std::sqrt(std::pow(point[0] - camera_position[0], 2.) +
-                          std::pow(point[1] - camera_position[1], 2.) +
-                          std::pow(point[2] - camera_position[2], 2.));
+                std::hypot(point[0] - camera_position[0],
+                           point[1] - camera_position[1],
+                           point[2] - camera_position[2]);
               const double distance_factor =
                 distance_to_camera / (2. * std::max(x_dimension, y_dimension));
 
@@ -2625,10 +2630,10 @@ GridOut::write_svg(const Triangulation<2, 2> &tria, std::ostream &out) const
 
                       if (svg_flags.label_boundary_id)
                         {
-                          const double distance_to_camera = std::sqrt(
-                            std::pow(point[0] - camera_position[0], 2.) +
-                            std::pow(point[1] - camera_position[1], 2.) +
-                            std::pow(point[2] - camera_position[2], 2.));
+                          const double distance_to_camera =
+                            std::hypot(point[0] - camera_position[0],
+                                       point[1] - camera_position[1],
+                                       point[2] - camera_position[2]);
                           const double distance_factor =
                             distance_to_camera /
                             (2. * std::max(x_dimension, y_dimension));
@@ -2956,7 +2961,7 @@ GridOut::write_svg(const Triangulation<2, 2> &tria, std::ostream &out) const
 
           out << "</text>" << '\n';
 
-          labeling_index++;
+          ++labeling_index;
         }
     }
 
@@ -2973,7 +2978,7 @@ void
 GridOut::write_mathgl(const Triangulation<1> &, std::ostream &) const
 {
   // 1d specialization not done yet
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -3032,7 +3037,7 @@ GridOut::write_mathgl(const Triangulation<dim, spacedim> &tria,
         out << "\nrotate 60 40";
         break;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
   out << '\n';
 
@@ -3056,7 +3061,7 @@ GridOut::write_mathgl(const Triangulation<dim, spacedim> &tria,
           << '\n';
         break;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   // (iv) write a list of vertices of cells
@@ -3414,7 +3419,7 @@ GridOut::write_vtk(const Triangulation<dim, spacedim> &tria,
                 out << cell->vertex_index(permutation_table[i]);
               }
             else
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
         out << '\n';
       }
@@ -3684,7 +3689,7 @@ GridOut::write_mesh_per_processor_as_vtu(
           else
             pos += 1;
           const unsigned int n_procs =
-            Utilities::MPI::n_mpi_processes(tr->get_communicator());
+            Utilities::MPI::n_mpi_processes(tr->get_mpi_communicator());
           for (unsigned int i = 0; i < n_procs; ++i)
             filenames.push_back(filename_without_extension.substr(pos) +
                                 ".proc" + Utilities::int_to_string(i, 4) +
@@ -3699,7 +3704,7 @@ GridOut::write_mesh_per_processor_as_vtu(
 
           // We need a dummy vector with the names of the data values in the
           // .vtu files in order that the .pvtu contains reference these values
-          Vector<float> dummy_vector(tr->n_active_cells());
+          const Vector<float> dummy_vector(tr->n_active_cells());
           data_out.add_data_vector(dummy_vector, "level");
           data_out.add_data_vector(dummy_vector, "subdomain");
           data_out.add_data_vector(dummy_vector, "level_subdomain");
@@ -3784,7 +3789,7 @@ GridOut::n_boundary_faces(const Triangulation<dim, spacedim> &tria) const
 
   for (const auto &face : tria.active_face_iterators())
     if ((face->at_boundary()) && (face->boundary_id() != 0))
-      n_faces++;
+      ++n_faces;
 
   return n_faces;
 }
@@ -3923,7 +3928,7 @@ GridOut::write_msh_faces(const Triangulation<dim, spacedim> &tria,
                      (face->reference_cell() == ReferenceCells::Line))
               out << ' ' << face->vertex_index(vertex) + 1;
             else
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
         out << '\n';
 
@@ -4077,7 +4082,7 @@ GridOut::write_ucd_faces(const Triangulation<dim, spacedim> &tria,
               out << "quad    ";
               break;
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
           }
         // note: vertex numbers are 1-base
         for (unsigned int vertex = 0;
@@ -4232,10 +4237,10 @@ namespace internal
           boundary_points[0][0]            = 0;
           boundary_points[n_points - 1][0] = 1;
           for (unsigned int i = 1; i < n_points - 1; ++i)
-            boundary_points[i](0) = 1. * i / (n_points - 1);
+            boundary_points[i][0] = 1. * i / (n_points - 1);
 
-          std::vector<double> dummy_weights(n_points, 1. / n_points);
-          Quadrature<dim - 1> quadrature(boundary_points, dummy_weights);
+          const std::vector<double> dummy_weights(n_points, 1. / n_points);
+          const Quadrature<dim - 1> quadrature(boundary_points, dummy_weights);
 
           q_projector = QProjector<dim>::project_to_all_faces(
             ReferenceCells::get_hypercube<dim>(), quadrature);
@@ -4288,7 +4293,12 @@ namespace internal
                       std::vector<Point<spacedim>> line_points;
                       // compute offset of quadrature points within set of
                       // projected points
-                      const unsigned int offset = face_no * n_points;
+                      const auto offset =
+                        QProjector<dim>::DataSetDescriptor::face(
+                          cell->reference_cell(),
+                          face_no,
+                          cell->combined_face_orientation(face_no),
+                          n_points);
                       for (unsigned int i = 0; i < n_points; ++i)
                         line_points.push_back(
                           mapping->transform_unit_to_real_cell(
@@ -4349,13 +4359,13 @@ namespace internal
           boundary_points[0][0]            = 0;
           boundary_points[n_points - 1][0] = 1;
           for (unsigned int i = 1; i < n_points - 1; ++i)
-            boundary_points[i](0) = 1. * i / (n_points - 1);
+            boundary_points[i][0] = 1. * i / (n_points - 1);
 
-          std::vector<double> dummy_weights(n_points, 1. / n_points);
-          Quadrature<1>       quadrature1d(boundary_points, dummy_weights);
+          const std::vector<double> dummy_weights(n_points, 1. / n_points);
+          const Quadrature<1> quadrature1d(boundary_points, dummy_weights);
 
           // tensor product of points, only one copy
-          QIterated<dim - 1> quadrature(quadrature1d, 1);
+          const QIterated<dim - 1> quadrature(quadrature1d, 1);
           q_projector = std::make_unique<Quadrature<dim>>(
             QProjector<dim>::project_to_all_faces(
               ReferenceCells::get_hypercube<dim>(), quadrature));
@@ -4482,7 +4492,7 @@ namespace internal
                   out << '\n'; // end of second line
                 }
               else
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
           else // need to handle curved boundaries
             {
@@ -4498,7 +4508,12 @@ namespace internal
                   if (face->at_boundary() &&
                       gnuplot_flags.write_additional_boundary_lines)
                     {
-                      const unsigned int offset = face_no * n_points * n_points;
+                      const auto offset =
+                        QProjector<dim>::DataSetDescriptor::face(
+                          cell->reference_cell(),
+                          face_no,
+                          cell->combined_face_orientation(face_no),
+                          n_points * n_points);
                       for (unsigned int i = 0; i < n_points - 1; ++i)
                         for (unsigned int j = 0; j < n_points - 1; ++j)
                           {
@@ -4634,7 +4649,7 @@ namespace internal
               const GridOutFlags::Eps<2> &,
               const GridOutFlags::Eps<3> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
     void
@@ -4644,7 +4659,7 @@ namespace internal
               const GridOutFlags::Eps<2> &,
               const GridOutFlags::Eps<3> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
     void
@@ -4654,7 +4669,7 @@ namespace internal
               const GridOutFlags::Eps<2> &,
               const GridOutFlags::Eps<3> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
     void
@@ -4664,7 +4679,7 @@ namespace internal
               const GridOutFlags::Eps<2> &,
               const GridOutFlags::Eps<3> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
 
@@ -4711,7 +4726,7 @@ namespace internal
         {
           case 1:
             {
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
               break;
             }
 
@@ -4755,8 +4770,8 @@ namespace internal
                       // optimize away this
                       // little kludge
                       line_list.emplace_back(
-                        Point<2>(line->vertex(0)(0), line->vertex(0)(1)),
-                        Point<2>(line->vertex(1)(0), line->vertex(1)(1)),
+                        Point<2>(line->vertex(0)[0], line->vertex(0)[1]),
+                        Point<2>(line->vertex(1)[0], line->vertex(1)[1]),
                         line->user_flag_set(),
                         cell->level());
                   }
@@ -4777,10 +4792,10 @@ namespace internal
                   std::vector<Point<dim - 1>> boundary_points(n_points);
 
                   for (unsigned int i = 0; i < n_points; ++i)
-                    boundary_points[i](0) = 1. * (i + 1) / (n_points + 1);
+                    boundary_points[i][0] = 1. * (i + 1) / (n_points + 1);
 
-                  Quadrature<dim - 1> quadrature(boundary_points);
-                  Quadrature<dim>     q_projector(
+                  const Quadrature<dim - 1> quadrature(boundary_points);
+                  const Quadrature<dim>     q_projector(
                     QProjector<dim>::project_to_all_faces(
                       ReferenceCells::get_hypercube<dim>(), quadrature));
 
@@ -4798,20 +4813,25 @@ namespace internal
                         if (face->at_boundary())
                           {
                             Point<dim> p0_dim(face->vertex(0));
-                            Point<2>   p0(p0_dim(0), p0_dim(1));
+                            Point<2>   p0(p0_dim[0], p0_dim[1]);
 
                             // loop over
                             // all pieces
                             // of the line
                             // and generate
                             // line-lets
-                            const unsigned int offset = face_no * n_points;
+                            const auto offset =
+                              QProjector<dim>::DataSetDescriptor::face(
+                                cell->reference_cell(),
+                                face_no,
+                                cell->combined_face_orientation(face_no),
+                                n_points);
                             for (unsigned int i = 0; i < n_points; ++i)
                               {
                                 const Point<dim> p1_dim(
                                   mapping->transform_unit_to_real_cell(
                                     cell, q_projector.point(offset + i)));
-                                const Point<2> p1(p1_dim(0), p1_dim(1));
+                                const Point<2> p1(p1_dim[0], p1_dim[1]);
 
                                 line_list.emplace_back(p0,
                                                        p1,
@@ -4822,7 +4842,7 @@ namespace internal
 
                             // generate last piece
                             const Point<dim> p1_dim(face->vertex(1));
-                            const Point<2>   p1(p1_dim(0), p1_dim(1));
+                            const Point<2>   p1(p1_dim[0], p1_dim[1]);
                             line_list.emplace_back(p0,
                                                    p1,
                                                    face->user_flag_set(),
@@ -4906,7 +4926,7 @@ namespace internal
             }
 
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
 
 
@@ -4914,9 +4934,9 @@ namespace internal
       // find out minimum and maximum x and
       // y coordinates to compute offsets
       // and scaling factors
-      double       x_min     = tria.begin_active()->vertex(0)(0);
+      double       x_min     = tria.begin_active()->vertex(0)[0];
       double       x_max     = x_min;
-      double       y_min     = tria.begin_active()->vertex(0)(1);
+      double       y_min     = tria.begin_active()->vertex(0)[1];
       double       y_max     = y_min;
       unsigned int max_level = line_list.begin()->level;
 
@@ -4924,17 +4944,17 @@ namespace internal
            line != line_list.end();
            ++line)
         {
-          x_min = std::min(x_min, line->first(0));
-          x_min = std::min(x_min, line->second(0));
+          x_min = std::min(x_min, line->first[0]);
+          x_min = std::min(x_min, line->second[0]);
 
-          x_max = std::max(x_max, line->first(0));
-          x_max = std::max(x_max, line->second(0));
+          x_max = std::max(x_max, line->first[0]);
+          x_max = std::max(x_max, line->second[0]);
 
-          y_min = std::min(y_min, line->first(1));
-          y_min = std::min(y_min, line->second(1));
+          y_min = std::min(y_min, line->first[1]);
+          y_min = std::min(y_min, line->second[1]);
 
-          y_max = std::max(y_max, line->first(1));
-          y_max = std::max(y_max, line->second(1));
+          y_max = std::max(y_max, line->first[1]);
+          y_max = std::max(y_max, line->second[1]);
 
           max_level = std::max(max_level, line->level);
         }
@@ -5054,8 +5074,8 @@ namespace internal
 
           for (const auto &cell : tria.active_cell_iterators())
             {
-              out << (cell->center()(0) - offset(0)) * scale << ' '
-                  << (cell->center()(1) - offset(1)) * scale << " m" << '\n'
+              out << (cell->center()[0] - offset[0]) * scale << ' '
+                  << (cell->center()[1] - offset[1]) * scale << " m" << '\n'
                   << "[ [(Helvetica) 12.0 0.0 true true (";
               if (eps_flags_2.write_cell_number_level)
                 out << cell;
@@ -5084,8 +5104,8 @@ namespace internal
                 {
                   treated_vertices.insert(cell->vertex_index(vertex_no));
 
-                  out << (cell->vertex(vertex_no)(0) - offset(0)) * scale << ' '
-                      << (cell->vertex(vertex_no)(1) - offset(1)) * scale
+                  out << (cell->vertex(vertex_no)[0] - offset[0]) * scale << ' '
+                      << (cell->vertex(vertex_no)[1] - offset[1]) * scale
                       << " m" << '\n'
                       << "[ [(Helvetica) 10.0 0.0 true true ("
                       << cell->vertex_index(vertex_no) << ")] "
@@ -5168,7 +5188,7 @@ GridOut::write(const Triangulation<dim, spacedim> &tria,
         return;
     }
 
-  Assert(false, ExcInternalError());
+  DEAL_II_ASSERT_UNREACHABLE();
 }
 
 

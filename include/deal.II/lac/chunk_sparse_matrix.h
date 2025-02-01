@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2008 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_chunk_sparse_matrix_h
 #define dealii_chunk_sparse_matrix_h
@@ -19,8 +18,8 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/smartpointer.h>
-#include <deal.II/base/subscriptor.h>
+#include <deal.II/base/enable_observer_pointer.h>
+#include <deal.II/base/observer_pointer.h>
 
 #include <deal.II/lac/chunk_sparsity_pattern.h>
 #include <deal.II/lac/exceptions.h>
@@ -446,7 +445,7 @@ DEAL_II_NAMESPACE_OPEN
  * in the manual).
  */
 template <typename number>
-class ChunkSparseMatrix : public virtual Subscriptor
+class ChunkSparseMatrix : public virtual EnableObserverPointer
 {
 public:
   /**
@@ -1406,9 +1405,9 @@ private:
   /**
    * Pointer to the sparsity pattern used for this matrix. In order to
    * guarantee that it is not deleted while still in use, we subscribe to it
-   * using the SmartPointer class.
+   * using the ObserverPointer class.
    */
-  SmartPointer<const ChunkSparsityPattern, ChunkSparseMatrix<number>> cols;
+  ObserverPointer<const ChunkSparsityPattern, ChunkSparseMatrix<number>> cols;
 
   /**
    * Array of values for all the nonzero entries. The position of an

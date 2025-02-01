@@ -1,24 +1,22 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2011 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2012 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Katharina Kormann, Martin Kronbichler, Uppsala University, 2011-2012
  */
 
 
 // The necessary files from the deal.II library.
-#include <deal.II/base/logstream.h>
 #include <deal.II/base/multithread_info.h>
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/function.h>
@@ -308,10 +306,10 @@ namespace Step48
 #else
     Triangulation<dim> triangulation;
 #endif
-    FE_Q<dim>       fe;
+    const FE_Q<dim> fe;
     DoFHandler<dim> dof_handler;
 
-    MappingQ1<dim> mapping;
+    const MappingQ1<dim> mapping;
 
     AffineConstraints<double> constraints;
     IndexSet                  locally_relevant_dofs;

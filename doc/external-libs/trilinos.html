@@ -49,9 +49,8 @@
     <h5>Installing Trilinos</h5>
 
     <p style="color: red">
-      Note: The current version of deal.II requires at least Trilinos 12.4
-      (12.14.1 if Trilinos includes Kokkos).
-      Deal.II is known to work with Trilinos up to 13.4. Other versions of
+      Note: The current version of deal.II requires at least Trilinos 12.14.1.
+      Deal.II is known to work with Trilinos up to 16.0.0. Other versions of
       Trilinos should work too but have not been tested prior to the
       release.
     </p>
@@ -100,8 +99,8 @@
     -DTrilinos_ENABLE_NOX=ON                         \
     -DTrilinos_ENABLE_ROL=ON                         \
     -DTrilinos_ENABLE_Tpetra=ON                      \
-    -DTrilinos_ENABLE_COMPLEX_DOUBLE=ON              \
-    -DTrilinos_ENABLE_COMPLEX_FLOAT=ON               \
+    -DTrilinos_ENABLE_COMPLEX=ON                     \
+    -DTrilinos_ENABLE_FLOAT=ON                       \
     -DTrilinos_ENABLE_Zoltan=ON                      \
     -DTrilinos_VERBOSE_CONFIGURE=OFF                 \
     -DTPL_ENABLE_MPI=ON                              \

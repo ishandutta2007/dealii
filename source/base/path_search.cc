@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2019 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2005 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/logstream.h>
@@ -34,17 +33,17 @@ PathSearch::initialize_classes()
 {
   std::vector<std::string> v;
   v.emplace_back();
-  path_lists.insert(map_type(std::string("PARAMETER"), v));
+  path_lists.insert(map_type("PARAMETER", v));
 
   /*
    * TODO: re-enable some sensible default paths. Maier, 2012
    */
-  path_lists.insert(map_type(std::string("MESH"), v));
+  path_lists.insert(map_type("MESH", v));
 
   v.clear();
   v.emplace_back();
   v.emplace_back(".prm");
-  suffix_lists.insert(map_type(std::string("PARAMETER"), v));
+  suffix_lists.insert(map_type("PARAMETER", v));
 
   /*
    * TODO: "Would require linking with the deal.II libraries"? This .cc
@@ -63,7 +62,7 @@ PathSearch::initialize_classes()
   v.emplace_back(".plt");
   v.emplace_back(".nc");
   v.emplace_back(".msh");
-  suffix_lists.insert(map_type(std::string("MESH"), v));
+  suffix_lists.insert(map_type("MESH", v));
 }
 
 std::vector<std::string> &
@@ -164,7 +163,7 @@ PathSearch::find(const std::string &filename,
         }
     }
   AssertThrow(false, ExcFileNotFound(filename, cls));
-  return std::string("");
+  return "";
 }
 
 std::string
@@ -190,7 +189,7 @@ PathSearch::find(const std::string &filename, const char *open_mode)
         }
     }
   AssertThrow(false, ExcFileNotFound(filename, cls));
-  return std::string("");
+  return "";
 }
 
 

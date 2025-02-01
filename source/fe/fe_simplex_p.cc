@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2020 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -23,6 +22,9 @@
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_simplex_p.h>
 #include <deal.II/fe/fe_tools.h>
+#include <deal.II/fe/mapping.h>
+
+#include <deal.II/grid/grid_generator.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -42,9 +44,7 @@ namespace
     for (const auto face_vertex_no : face_reference_cell.vertex_indices())
       {
         const auto vertex_no = reference_cell.face_to_cell_vertices(
-          face_no,
-          face_vertex_no,
-          ReferenceCell::default_combined_face_orientation());
+          face_no, face_vertex_no, numbers::default_geometric_orientation);
 
         midpoint += reference_cell.template vertex<dim>(vertex_no);
       }
@@ -72,7 +72,7 @@ namespace
               case 3:
                 return {1, 2};
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
         case 2:
           switch (degree)
@@ -84,7 +84,7 @@ namespace
               case 3:
                 return {1, 2, 1};
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
         case 3:
           switch (degree)
@@ -96,11 +96,11 @@ namespace
               case 3:
                 return {1, 2, 1, 0};
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
       }
 
-    Assert(false, ExcNotImplemented());
+    DEAL_II_NOT_IMPLEMENTED();
     return {};
   }
 
@@ -216,7 +216,6 @@ namespace
   constraints_fe_p<2>(const unsigned int degree)
   {
     constexpr int dim = 2;
-    Assert(degree <= 3, ExcNotImplemented());
 
     // the following implements the 2d case
     // (the 3d case is not implemented yet)
@@ -227,13 +226,16 @@ namespace
     std::vector<Point<dim - 1>> constraint_points;
     // midpoint
     constraint_points.emplace_back(0.5);
-    if (degree == 2)
-      {
-        // midpoint on subface 0
-        constraint_points.emplace_back(0.25);
-        // midpoint on subface 1
-        constraint_points.emplace_back(0.75);
-      }
+    // subface 0
+    for (unsigned int i = 1; i < degree; ++i)
+      constraint_points.push_back(
+        GeometryInfo<dim - 1>::child_to_cell_coordinates(
+          Point<dim - 1>(i / double(degree)), 0));
+    // subface 1
+    for (unsigned int i = 1; i < degree; ++i)
+      constraint_points.push_back(
+        GeometryInfo<dim - 1>::child_to_cell_coordinates(
+          Point<dim - 1>(i / double(degree)), 1));
 
     // Now construct relation between destination (child) and source (mother)
     // dofs.
@@ -312,7 +314,7 @@ namespace
                   continuous_dpo[dim]};
           }
 
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return {};
       }
   }
@@ -324,13 +326,14 @@ template <int dim, int spacedim>
 FE_SimplexPoly<dim, spacedim>::FE_SimplexPoly(
   const BarycentricPolynomials<dim>              polynomials,
   const FiniteElementData<dim>                  &fe_data,
+  const bool                                     prolongation_is_additive,
   const std::vector<Point<dim>>                 &unit_support_points,
   const std::vector<std::vector<Point<dim - 1>>> unit_face_support_points,
   const FullMatrix<double>                      &interface_constraints)
   : dealii::FE_Poly<dim, spacedim>(
       polynomials,
       fe_data,
-      std::vector<bool>(fe_data.dofs_per_cell),
+      std::vector<bool>(fe_data.dofs_per_cell, prolongation_is_additive),
       std::vector<ComponentMask>(fe_data.dofs_per_cell,
                                  ComponentMask(std::vector<bool>(1, true))))
 {
@@ -359,14 +362,27 @@ FE_SimplexPoly<dim, spacedim>::get_prolongation_matrix(
   const unsigned int         child,
   const RefinementCase<dim> &refinement_case) const
 {
-  Assert(refinement_case == RefinementCase<dim>::isotropic_refinement,
-         ExcNotImplemented());
+  if (dim == 3)
+    Assert(RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_68)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_57)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_49)),
+           ExcNotImplemented());
+  else
+    Assert(refinement_case ==
+             RefinementCase<dim>(RefinementCase<dim>::isotropic_refinement),
+           ExcNotImplemented());
   AssertDimension(dim, spacedim);
 
   // initialization upon first request
   if (this->prolongation[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(prolongation_matrix_mutex);
 
       // if matrix got updated while waiting for the lock
       if (this->prolongation[refinement_case - 1][child].n() ==
@@ -377,16 +393,41 @@ FE_SimplexPoly<dim, spacedim>::get_prolongation_matrix(
       // be able to modify them inside a const function
       auto &this_nonconst = const_cast<FE_SimplexPoly<dim, spacedim> &>(*this);
 
-      std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
-        RefinementCase<dim>::isotropic_refinement);
-      isotropic_matrices.back().resize(
-        GeometryInfo<dim>::n_children(RefinementCase<dim>(refinement_case)),
-        FullMatrix<double>(this->n_dofs_per_cell(), this->n_dofs_per_cell()));
+      if (dim == 2)
+        {
+          std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
+            RefinementCase<dim>::isotropic_refinement);
+          isotropic_matrices.back().resize(
+            this->reference_cell().n_children(
+              RefinementCase<dim>(refinement_case)),
+            FullMatrix<double>(this->n_dofs_per_cell(),
+                               this->n_dofs_per_cell()));
 
-      FETools::compute_embedding_matrices(*this, isotropic_matrices, true);
+          FETools::compute_embedding_matrices(*this, isotropic_matrices, true);
 
-      this_nonconst.prolongation[refinement_case - 1] =
-        std::move(isotropic_matrices.back());
+          this_nonconst.prolongation[refinement_case - 1] =
+            std::move(isotropic_matrices.back());
+        }
+      else if (dim == 3)
+        {
+          std::vector<std::vector<FullMatrix<double>>> matrices(
+            static_cast<unsigned int>(IsotropicRefinementChoice::cut_tet_49),
+            std::vector<FullMatrix<double>>(
+              this->reference_cell().n_children(
+                RefinementCase<dim>(refinement_case)),
+              FullMatrix<double>(this->n_dofs_per_cell(),
+                                 this->n_dofs_per_cell())));
+          FETools::compute_embedding_matrices(*this, matrices, true);
+          for (unsigned int refinement_direction = static_cast<unsigned int>(
+                 IsotropicRefinementChoice::cut_tet_68);
+               refinement_direction <=
+               static_cast<unsigned int>(IsotropicRefinementChoice::cut_tet_49);
+               refinement_direction++)
+            this_nonconst.prolongation[refinement_direction - 1] =
+              std::move(matrices[refinement_direction - 1]);
+        }
+      else
+        DEAL_II_ASSERT_UNREACHABLE();
     }
 
   // finally return the matrix
@@ -401,34 +442,115 @@ FE_SimplexPoly<dim, spacedim>::get_restriction_matrix(
   const unsigned int         child,
   const RefinementCase<dim> &refinement_case) const
 {
-  Assert(refinement_case == RefinementCase<dim>::isotropic_refinement,
-         ExcNotImplemented());
+  if (dim == 3)
+    Assert(RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_68)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_57)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_49)),
+           ExcNotImplemented());
+  else
+    Assert(refinement_case == RefinementCase<dim>::isotropic_refinement,
+           ExcNotImplemented());
   AssertDimension(dim, spacedim);
 
   // initialization upon first request
   if (this->restriction[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(restriction_matrix_mutex);
 
       // if matrix got updated while waiting for the lock
       if (this->restriction[refinement_case - 1][child].n() ==
           this->n_dofs_per_cell())
         return this->restriction[refinement_case - 1][child];
 
-      // now do the work. need to get a non-const version of data in order to
-      // be able to modify them inside a const function
-      auto &this_nonconst = const_cast<FE_SimplexPoly<dim, spacedim> &>(*this);
+      // get the restriction matrix
+      // Refine a unit cell. As the parent cell is a unit
+      // cell, the reference cell of the children equals the parent, i.e. they
+      // have the support points at the same locations. So we just have to check
+      // if a support point of the parent is one of the interpolation points of
+      // the child. If this is not the case we find the interpolation of the
+      // point.
 
-      std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
+      const double       eps = 1e-12;
+      FullMatrix<double> restriction_mat(this->n_dofs_per_cell(),
+                                         this->n_dofs_per_cell());
+
+      // first get all support points on the reference cell
+      const std::vector<Point<dim>> unit_support_points =
+        this->get_unit_support_points();
+
+      // now create children on the reference cell
+      Triangulation<dim> tria;
+      GridGenerator::reference_cell(tria, this->reference_cell());
+      tria.begin_active()->set_refine_flag(
         RefinementCase<dim>::isotropic_refinement);
-      isotropic_matrices.back().resize(
-        GeometryInfo<dim>::n_children(RefinementCase<dim>(refinement_case)),
-        FullMatrix<double>(this->n_dofs_per_cell(), this->n_dofs_per_cell()));
+      if (dim == 3)
+        tria.begin_active()->set_refine_choice(refinement_case);
+      tria.execute_coarsening_and_refinement();
 
-      FETools::compute_projection_matrices(*this, isotropic_matrices, true);
+      const auto &child_cell = tria.begin(0)->child(child);
 
-      this_nonconst.restriction[refinement_case - 1] =
-        std::move(isotropic_matrices.back());
+      // iterate over all support points and transform them to the unit cell of
+      // the child
+      for (unsigned int i = 0; i < unit_support_points.size(); i++)
+        {
+          std::vector<Point<dim>>            transformed_point(1);
+          const std::vector<Point<spacedim>> unit_support_point = {
+            dim == 2 ? Point<spacedim>(unit_support_points[i][0],
+                                       unit_support_points[i][1]) :
+                       Point<spacedim>(unit_support_points[i][0],
+                                       unit_support_points[i][1],
+                                       unit_support_points[i][2])};
+          this->reference_cell()
+            .template get_default_linear_mapping<dim, spacedim>()
+            .transform_points_real_to_unit_cell(
+              child_cell,
+              make_array_view(unit_support_point),
+              make_array_view(transformed_point));
+
+          // if point is inside the unit cell iterate over all shape functions
+          if (this->reference_cell().contains_point(transformed_point[0], eps))
+            for (unsigned int j = 0; j < this->n_dofs_per_cell(); j++)
+              restriction_mat[i][j] =
+                this->shape_value(j, transformed_point[0]);
+        }
+#ifdef DEBUG
+      for (unsigned int i = 0; i < this->n_dofs_per_cell(); i++)
+        {
+          double sum = 0.;
+
+          for (unsigned int j = 0; j < this->n_dofs_per_cell(); j++)
+            sum += restriction_mat[i][j];
+
+          Assert(std::fabs(sum - 1) < eps || std::fabs(sum) < eps,
+                 ExcInternalError(
+                   "The entries in a row of the local "
+                   "restriction matrix do not add to zero or one. "
+                   "This typically indicates that the "
+                   "polynomial interpolation is "
+                   "ill-conditioned such that round-off "
+                   "prevents the sum to be one."));
+        }
+#endif
+
+      // Remove small entries from the matrix
+      for (unsigned int i = 0; i < restriction_mat.m(); ++i)
+        for (unsigned int j = 0; j < restriction_mat.n(); ++j)
+          {
+            if (std::fabs(restriction_mat(i, j)) < eps)
+              restriction_mat(i, j) = 0.;
+            if (std::fabs(restriction_mat(i, j) - 1) < eps)
+              restriction_mat(i, j) = 1.;
+          }
+
+      const_cast<FullMatrix<double> &>(
+        this->restriction[refinement_case - 1][child]) =
+        std::move(restriction_mat);
     }
 
   // finally return the matrix
@@ -620,6 +742,7 @@ FE_SimplexP<dim, spacedim>::FE_SimplexP(const unsigned int degree)
                              1,
                              degree,
                              FiniteElementData<dim>::H1),
+      false,
       unit_support_points_fe_p<dim>(degree),
       unit_face_support_points_fe_p<dim>(degree, FiniteElementData<dim>::H1),
       constraints_fe_p<dim>(degree))
@@ -648,7 +771,8 @@ std::string
 FE_SimplexP<dim, spacedim>::get_name() const
 {
   std::ostringstream namebuf;
-  namebuf << "FE_SimplexP<" << dim << ">(" << this->degree << ")";
+  namebuf << "FE_SimplexP<" << Utilities::dim_string(dim, spacedim) << ">("
+          << this->degree << ")";
 
   return namebuf.str();
 }
@@ -709,7 +833,7 @@ FE_SimplexP<dim, spacedim>::compare_for_domination(
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -753,7 +877,7 @@ FE_SimplexP<dim, spacedim>::hp_vertex_dof_identities(
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return {};
     }
 }
@@ -857,7 +981,7 @@ FE_SimplexP<dim, spacedim>::hp_line_dof_identities(
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return {};
     }
 }
@@ -873,6 +997,7 @@ FE_SimplexDGP<dim, spacedim>::FE_SimplexDGP(const unsigned int degree)
                              1,
                              degree,
                              FiniteElementData<dim>::L2),
+      true,
       unit_support_points_fe_p<dim>(degree),
       unit_face_support_points_fe_p<dim>(degree, FiniteElementData<dim>::L2),
       constraints_fe_p<dim>(degree))
@@ -894,7 +1019,8 @@ std::string
 FE_SimplexDGP<dim, spacedim>::get_name() const
 {
   std::ostringstream namebuf;
-  namebuf << "FE_SimplexDGP<" << dim << ">(" << this->degree << ")";
+  namebuf << "FE_SimplexDGP<" << Utilities::dim_string(dim, spacedim) << ">("
+          << this->degree << ")";
 
   return namebuf.str();
 }
@@ -950,7 +1076,7 @@ FE_SimplexDGP<dim, spacedim>::compare_for_domination(
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -976,6 +1102,85 @@ FE_SimplexDGP<dim, spacedim>::hp_line_dof_identities(
   (void)fe_other;
 
   return {};
+}
+
+
+
+template <int dim, int spacedim>
+const FullMatrix<double> &
+FE_SimplexDGP<dim, spacedim>::get_restriction_matrix(
+  const unsigned int         child,
+  const RefinementCase<dim> &refinement_case) const
+{
+  if (dim == 3)
+    Assert(RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_68)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_57)) ||
+             RefinementCase<dim>(refinement_case) ==
+               RefinementCase<dim>(
+                 static_cast<char>(IsotropicRefinementChoice::cut_tet_49)),
+           ExcNotImplemented());
+  else
+    Assert(refinement_case == RefinementCase<dim>::isotropic_refinement,
+           ExcNotImplemented());
+  AssertDimension(dim, spacedim);
+
+  // initialization upon first request
+  if (this->restriction[refinement_case - 1][child].n() == 0)
+    {
+      std::lock_guard<std::mutex> lock(this->restriction_matrix_mutex);
+
+      // if matrix got updated while waiting for the lock
+      if (this->restriction[refinement_case - 1][child].n() ==
+          this->n_dofs_per_cell())
+        return this->restriction[refinement_case - 1][child];
+
+      // now do the work. need to get a non-const version of data in order to
+      // be able to modify them inside a const function
+      auto &this_nonconst = const_cast<FE_SimplexDGP<dim, spacedim> &>(*this);
+
+      if (dim == 2)
+        {
+          std::vector<std::vector<FullMatrix<double>>> isotropic_matrices(
+            RefinementCase<dim>::isotropic_refinement);
+          isotropic_matrices.back().resize(
+            this->reference_cell().n_children(
+              RefinementCase<dim>(refinement_case)),
+            FullMatrix<double>(this->n_dofs_per_cell(),
+                               this->n_dofs_per_cell()));
+
+          FETools::compute_projection_matrices(*this, isotropic_matrices, true);
+
+          this_nonconst.restriction[refinement_case - 1] =
+            std::move(isotropic_matrices.back());
+        }
+      else if (dim == 3)
+        {
+          std::vector<std::vector<FullMatrix<double>>> matrices(
+            static_cast<unsigned int>(IsotropicRefinementChoice::cut_tet_49),
+            std::vector<FullMatrix<double>>(
+              this->reference_cell().n_children(
+                RefinementCase<dim>(refinement_case)),
+              FullMatrix<double>(this->n_dofs_per_cell(),
+                                 this->n_dofs_per_cell())));
+          FETools::compute_projection_matrices(*this, matrices, true);
+          for (unsigned int refinement_direction = static_cast<unsigned int>(
+                 IsotropicRefinementChoice::cut_tet_68);
+               refinement_direction <=
+               static_cast<unsigned int>(IsotropicRefinementChoice::cut_tet_49);
+               refinement_direction++)
+            this_nonconst.restriction[refinement_direction - 1] =
+              std::move(matrices[refinement_direction - 1]);
+        }
+      else
+        DEAL_II_ASSERT_UNREACHABLE();
+    }
+
+  // finally return the matrix
+  return this->restriction[refinement_case - 1][child];
 }
 
 // explicit instantiations

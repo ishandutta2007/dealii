@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2017 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_matrix_free_evaluation_kernels_h
@@ -631,23 +630,48 @@ namespace internal
 
     using Number2 =
       typename FEEvaluationData<dim, Number, false>::shape_info_number_type;
-    using Eval =
-      EvaluatorTensorProduct<evaluate_general, 1, 0, 0, Number, Number2>;
 
     if (evaluation_flag & EvaluationFlags::values)
       {
         const auto *const shape_values = shape_data.front().shape_values.data();
-        auto             *values_quad_ptr        = fe_eval.begin_values();
-        const auto       *values_dofs_actual_ptr = values_dofs_actual;
+        auto             *out          = fe_eval.begin_values();
+        const auto       *in           = values_dofs_actual;
 
-        Eval eval(shape_values, nullptr, nullptr, n_dofs, n_q_points);
-        for (unsigned int c = 0; c < n_components; ++c)
+        for (unsigned int c = 0; c < n_components; c += 3)
           {
-            eval.template values<0, true, false>(values_dofs_actual_ptr,
-                                                 values_quad_ptr);
+            if (c + 1 == n_components)
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 1>(
+                shape_values, in, out, n_dofs, n_q_points, 1, 1);
+            else if (c + 2 == n_components)
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 2>(
+                shape_values, in, out, n_dofs, n_q_points, 1, 1);
+            else
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 3>(
+                shape_values, in, out, n_dofs, n_q_points, 1, 1);
 
-            values_quad_ptr += n_q_points;
-            values_dofs_actual_ptr += n_dofs;
+            out += 3 * n_q_points;
+            in += 3 * n_dofs;
           }
       }
 
@@ -655,24 +679,44 @@ namespace internal
       {
         const auto *const shape_gradients =
           shape_data.front().shape_gradients.data();
-        auto       *gradients_quad_ptr     = fe_eval.begin_gradients();
-        const auto *values_dofs_actual_ptr = values_dofs_actual;
+        auto       *out = fe_eval.begin_gradients();
+        const auto *in  = values_dofs_actual;
 
-        for (unsigned int c = 0; c < n_components; ++c)
+        for (unsigned int c = 0; c < n_components; c += 3)
           {
-            for (unsigned int d = 0; d < dim; ++d)
-              {
-                Eval eval(nullptr,
-                          shape_gradients + n_q_points * n_dofs * d,
-                          nullptr,
-                          n_dofs,
-                          n_q_points);
+            if (c + 1 == n_components)
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 1>(
+                shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+            else if (c + 2 == n_components)
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 2>(
+                shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+            else
+              apply_matrix_vector_product<evaluate_general,
+                                          EvaluatorQuantity::value,
+                                          /*transpose_matrix*/ true,
+                                          /*add*/ false,
+                                          /*consider_strides*/ false,
+                                          Number,
+                                          Number2,
+                                          /*n_components*/ 3>(
+                shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
 
-                eval.template gradients<0, true, false, dim>(
-                  values_dofs_actual_ptr, gradients_quad_ptr + d);
-              }
-            gradients_quad_ptr += n_q_points * dim;
-            values_dofs_actual_ptr += n_dofs;
+            out += 3 * n_q_points * dim;
+            in += 3 * n_dofs;
           }
       }
   }
@@ -703,27 +747,83 @@ namespace internal
 
     using Number2 =
       typename FEEvaluationData<dim, Number, false>::shape_info_number_type;
-    using Eval =
-      EvaluatorTensorProduct<evaluate_general, 1, 0, 0, Number, Number2>;
 
     if (integration_flag & EvaluationFlags::values)
       {
         const auto *const shape_values = shape_data.front().shape_values.data();
-        auto             *values_quad_ptr        = fe_eval.begin_values();
-        auto             *values_dofs_actual_ptr = values_dofs_actual;
+        auto             *in           = fe_eval.begin_values();
+        auto             *out          = values_dofs_actual;
 
-        Eval eval(shape_values, nullptr, nullptr, n_dofs, n_q_points);
-        for (unsigned int c = 0; c < n_components; ++c)
+        for (unsigned int c = 0; c < n_components; c += 3)
           {
             if (add_into_values_array == false)
-              eval.template values<0, false, false>(values_quad_ptr,
-                                                    values_dofs_actual_ptr);
+              {
+                if (c + 1 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 1>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                else if (c + 2 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 2>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                else
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 3>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+              }
             else
-              eval.template values<0, false, true>(values_quad_ptr,
-                                                   values_dofs_actual_ptr);
-
-            values_quad_ptr += n_q_points;
-            values_dofs_actual_ptr += n_dofs;
+              {
+                if (c + 1 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 1>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                else if (c + 2 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 2>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+                else
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 3>(
+                    shape_values, in, out, n_dofs, n_q_points, 1, 1);
+              }
+            out += 3 * n_dofs;
+            in += 3 * n_q_points;
           }
       }
 
@@ -731,30 +831,80 @@ namespace internal
       {
         const auto *const shape_gradients =
           shape_data.front().shape_gradients.data();
-        auto *gradients_quad_ptr     = fe_eval.begin_gradients();
-        auto *values_dofs_actual_ptr = values_dofs_actual;
+        auto *in  = fe_eval.begin_gradients();
+        auto *out = values_dofs_actual;
 
-        for (unsigned int c = 0; c < n_components; ++c)
+        for (unsigned int c = 0; c < n_components; c += 3)
           {
-            for (unsigned int d = 0; d < dim; ++d)
+            if (add_into_values_array == false &&
+                !(integration_flag & EvaluationFlags::values))
               {
-                Eval eval(nullptr,
-                          shape_gradients + n_q_points * n_dofs * d,
-                          nullptr,
-                          n_dofs,
-                          n_q_points);
-
-                if ((add_into_values_array == false &&
-                     !(integration_flag & EvaluationFlags::values)) &&
-                    d == 0)
-                  eval.template gradients<0, false, false, dim>(
-                    gradients_quad_ptr + d, values_dofs_actual_ptr);
+                if (c + 1 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 1>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                else if (c + 2 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 2>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
                 else
-                  eval.template gradients<0, false, true, dim>(
-                    gradients_quad_ptr + d, values_dofs_actual_ptr);
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ false,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 3>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
               }
-            gradients_quad_ptr += n_q_points * dim;
-            values_dofs_actual_ptr += n_dofs;
+            else
+              {
+                if (c + 1 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 1>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                else if (c + 2 == n_components)
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 2>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+                else
+                  apply_matrix_vector_product<evaluate_general,
+                                              EvaluatorQuantity::value,
+                                              /*transpose_matrix*/ false,
+                                              /*add*/ true,
+                                              /*consider_strides*/ false,
+                                              Number,
+                                              Number2,
+                                              /*n_components*/ 3>(
+                    shape_gradients, in, out, n_dofs, n_q_points * dim, 1, 1);
+              }
+            out += 3 * n_dofs;
+            in += 3 * n_q_points * dim;
           }
       }
   }
@@ -1286,7 +1436,7 @@ namespace internal
     // might have non-symmetric quadrature formula, so use the more
     // conservative 'evaluate_general' scheme rather than 'even_odd' as the
     // Hessians are not used very often
-    const MatrixFreeFunctions::UnivariateShapeData<Number> &data =
+    const MatrixFreeFunctions::UnivariateShapeData<Number2> &data =
       fe_eval.get_shape_info().data[0];
     AssertDimension(data.shape_gradients_collocation.size(),
                     data.n_q_points_1d * data.n_q_points_1d);
@@ -1357,7 +1507,7 @@ namespace internal
     using Number2 =
       typename FEEvaluationData<dim, Number, false>::shape_info_number_type;
 
-    const MatrixFreeFunctions::UnivariateShapeData<Number> &data =
+    const MatrixFreeFunctions::UnivariateShapeData<Number2> &data =
       fe_eval.get_shape_info().data[0];
     AssertDimension(data.shape_gradients_collocation.size(),
                     data.n_q_points_1d * data.n_q_points_1d);
@@ -1905,7 +2055,7 @@ namespace internal
                                                                   do_values);
             eval.template tangential<1, 2>(shape_data[1], values, values);
             eval.template tangential<0, 2>(shape_data[1], values, values);
-            eval.template normal<0>(shape_data[0], values, values_dofs, add);
+            eval.template normal<2>(shape_data[0], values, values_dofs, add);
           }
       }
     else
@@ -2061,6 +2211,16 @@ namespace internal
             fe_eval,
             sum_into_values_array);
         }
+      else if (element_type == ElementType::tensor_none)
+        {
+          evaluate_or_integrate<
+            FEEvaluationImpl<ElementType::tensor_none, dim, -1, 0, Number>>(
+            n_components,
+            actual_flag,
+            values_dofs,
+            fe_eval,
+            sum_into_values_array);
+        }
       else if (element_type == ElementType::tensor_symmetric_plus_dg0)
         {
           evaluate_or_integrate<
@@ -2077,19 +2237,6 @@ namespace internal
       else if (element_type == ElementType::truncated_tensor)
         {
           evaluate_or_integrate<FEEvaluationImpl<ElementType::truncated_tensor,
-                                                 dim,
-                                                 fe_degree,
-                                                 n_q_points_1d,
-                                                 Number>>(
-            n_components,
-            actual_flag,
-            values_dofs,
-            fe_eval,
-            sum_into_values_array);
-        }
-      else if (element_type == ElementType::tensor_none)
-        {
-          evaluate_or_integrate<FEEvaluationImpl<ElementType::tensor_none,
                                                  dim,
                                                  fe_degree,
                                                  n_q_points_1d,

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2021 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_matrix_free_fe_evaluation_data_h
@@ -23,13 +22,15 @@
 #include <deal.II/base/array_view.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/geometry_info.h>
+#include <deal.II/base/observer_pointer.h>
 #include <deal.II/base/signaling_nan.h>
-#include <deal.II/base/smartpointer.h>
 #include <deal.II/base/std_cxx20/iota_view.h>
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/base/template_constraints.h>
 #include <deal.II/base/tensor.h>
 #include <deal.II/base/vectorization.h>
+
+#include <deal.II/grid/reference_cell.h>
 
 #include <deal.II/matrix_free/dof_info.h>
 #include <deal.II/matrix_free/mapping_info_storage.h>
@@ -101,7 +102,7 @@ namespace internal
  * quadrature dimension the same as the space dimension) or for a face
  * integrator (with quadrature dimension one less)
  *
- * @tparam VectorizedArrayType Type of array to be woked on in a vectorized
+ * @tparam VectorizedArrayType Type of array to be worked on in a vectorized
  *                             fashion, defaults to VectorizedArray<Number>
  *
  * @note Currently only VectorizedArray<Number, width> is supported as
@@ -113,7 +114,8 @@ namespace internal
 template <int dim, typename Number, bool is_face>
 class FEEvaluationData
 {
-  using ShapeInfoType = internal::MatrixFreeFunctions::ShapeInfo<Number>;
+  using ShapeInfoType = internal::MatrixFreeFunctions::ShapeInfo<
+    typename internal::VectorizedArrayTrait<Number>::value_type>;
   using MappingInfoStorageType = internal::MatrixFreeFunctions::
     MappingInfoStorage<(is_face ? dim - 1 : dim), dim, Number>;
   using DoFInfo = internal::MatrixFreeFunctions::DoFInfo;
@@ -121,10 +123,10 @@ class FEEvaluationData
 public:
   static constexpr unsigned int dimension = dim;
 
-  using NumberType             = Number;
-  using shape_info_number_type = Number;
+  using NumberType = Number;
   using ScalarNumber =
     typename internal::VectorizedArrayTrait<Number>::value_type;
+  using shape_info_number_type = ScalarNumber;
 
   static constexpr unsigned int n_lanes =
     internal::VectorizedArrayTrait<Number>::width();
@@ -232,8 +234,9 @@ public:
   /**
    * Same as `normal_vector(const unsigned int q_point)`.
    *
-   * @warning  This function will be deprecated!
+   * @deprecated Use normal_vector() instead.
    */
+  DEAL_II_DEPRECATED_WITH_COMMENT("Use normal_vector() instead.")
   Tensor<1, dim, Number>
   get_normal_vector(const unsigned int q_point) const;
 
@@ -323,8 +326,8 @@ public:
    * Return a read-only pointer to the first field of function hessians on
    * quadrature points. First comes the xx-component of the hessian for the
    * first component on all quadrature points, then the yy-component,
-   * zz-component in (3d), then the xy-component, and so on. Next comes the xx-
-   * component of the second component, and so on. This is related to the
+   * zz-component in (3d), then the xy-component, and so on. Next comes the
+   * xx-component of the second component, and so on. This is related to the
    * internal data structures used in this class. The raw data after a call to
    * @p evaluate only contains unit cell operations, so possible
    * transformations, quadrature weights etc. must be applied manually. In
@@ -764,7 +767,7 @@ protected:
   const Tensor<1, dim, Number> *normal_vectors;
 
   /**
-   * A pointer to the normal vectors times the jacobian at faces.
+   * A pointer to the normal vectors times the Jacobian at faces.
    */
   const Tensor<1, dim, Number> *normal_x_jacobian;
 
@@ -1541,7 +1544,7 @@ FEEvaluationData<dim, Number, is_face>::get_current_cell_index() const
 {
   if (is_face && dof_access_index ==
                    internal::MatrixFreeFunctions::DoFInfo::dof_access_cell)
-    return cell * GeometryInfo<dim>::faces_per_cell + face_numbers[0];
+    return cell * ReferenceCells::max_n_faces<dim>() + face_numbers[0];
   else
     return cell;
 }

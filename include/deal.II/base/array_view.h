@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2015 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_array_view_h
 #define dealii_array_view_h
@@ -944,9 +943,9 @@ namespace internal
  * @relatesalso ArrayView
  */
 template <typename Iterator, typename MemorySpaceType = MemorySpace::Host>
-ArrayView<typename std::remove_reference<
-            typename std::iterator_traits<Iterator>::reference>::type,
-          MemorySpaceType>
+ArrayView<
+  std::remove_reference_t<typename std::iterator_traits<Iterator>::reference>,
+  MemorySpaceType>
 make_array_view(const Iterator begin, const Iterator end)
 {
   static_assert(
@@ -965,9 +964,9 @@ make_array_view(const Iterator begin, const Iterator end)
   Assert(internal::ArrayViewHelper::is_contiguous(begin, end),
          ExcMessage("The provided range isn't contiguous in memory!"));
   // the reference type, not the value type, knows the constness of the iterator
-  return ArrayView<typename std::remove_reference<
-                     typename std::iterator_traits<Iterator>::reference>::type,
-                   MemorySpaceType>(std::addressof(*begin), end - begin);
+  return ArrayView<
+    std::remove_reference_t<typename std::iterator_traits<Iterator>::reference>,
+    MemorySpaceType>(std::addressof(*begin), end - begin);
 }
 
 
@@ -1027,127 +1026,6 @@ inline ArrayView<Number, MemorySpaceType>
 make_array_view(ArrayView<Number, MemorySpaceType> &array_view)
 {
   return make_array_view(array_view.begin(), array_view.end());
-}
-
-
-
-/**
- * Create a view to an entire Tensor object. This is equivalent to initializing
- * an ArrayView object with a pointer to the first element and the size of the
- * given argument.
- *
- * This function is used for @p const references to objects of Tensor type
- * because they contain immutable elements. Consequently, the return type of
- * this function is a view to a set of @p const objects.
- *
- * @param[in] tensor The Tensor for which we want to have an array view
- * object. The array view corresponds to the <em>entire</em> object but the
- * order in which the entries are presented in the array is an implementation
- * detail and should not be relied upon.
- *
- * @deprecated This function suggests that the elements of a Tensor
- *   object are stored as a contiguous array, but this is not in fact true
- *   and one should not pretend that this so. As a consequence, this function
- *   is deprecated.
- *
- * @relatesalso ArrayView
- */
-template <int rank, int dim, typename Number>
-DEAL_II_DEPRECATED inline ArrayView<const Number>
-make_array_view(const Tensor<rank, dim, Number> &tensor)
-{
-  return make_array_view(tensor.begin_raw(), tensor.end_raw());
-}
-
-
-
-/**
- * Create a view to an entire Tensor object. This is equivalent to initializing
- * an ArrayView object with a pointer to the first element and the size of the
- * given argument.
- *
- * This function is used for non-@p const references to objects of Tensor type.
- * Such objects contain elements that can be written to. Consequently,
- * the return type of this function is a view to a set of writable objects.
- *
- * @param[in] tensor The Tensor for which we want to have an array view
- * object. The array view corresponds to the <em>entire</em> object but the
- * order in which the entries are presented in the array is an implementation
- * detail and should not be relied upon.
- *
- * @deprecated This function suggests that the elements of a Tensor
- *   object are stored as a contiguous array, but this is not in fact true
- *   and one should not pretend that this so. As a consequence, this function
- *   is deprecated.
- *
- * @relatesalso ArrayView
- */
-template <int rank, int dim, typename Number>
-DEAL_II_DEPRECATED inline ArrayView<Number>
-make_array_view(Tensor<rank, dim, Number> &tensor)
-{
-  return make_array_view(tensor.begin_raw(), tensor.end_raw());
-}
-
-
-
-/**
- * Create a view to an entire SymmetricTensor object. This is equivalent to
- * initializing an ArrayView object with a pointer to the first element and the
- * size of the given argument.
- *
- * This function is used for @p const references to objects of SymmetricTensor
- * type because they contain immutable elements. Consequently, the return type
- * of this function is a view to a set of @p const objects.
- *
- * @param[in] tensor The SymmetricTensor for which we want to have an array
- * view object. The array view corresponds to the <em>entire</em> object but
- * the order in which the entries are presented in the array is an
- * implementation detail and should not be relied upon.
- *
- * @deprecated This function suggests that the elements of a SymmetricTensor
- *   object are stored as a contiguous array, but this is not in fact true
- *   and one should not pretend that this so. As a consequence, this function
- *   is deprecated.
- *
- * @relatesalso ArrayView
- */
-template <int rank, int dim, typename Number>
-DEAL_II_DEPRECATED inline ArrayView<const Number>
-make_array_view(const SymmetricTensor<rank, dim, Number> &tensor)
-{
-  return make_array_view(tensor.begin_raw(), tensor.end_raw());
-}
-
-
-
-/**
- * Create a view to an entire SymmetricTensor object. This is equivalent to
- * initializing an ArrayView object with a pointer to the first element and the
- * size of the given argument.
- *
- * This function is used for non-@p const references to objects of
- * SymmetricTensor type. Such objects contain elements that can be written to.
- * Consequently, the return type of this function is a view to a set of writable
- * objects.
- *
- * @param[in] tensor The SymmetricTensor for which we want to have an array
- * view object. The array view corresponds to the <em>entire</em> object but
- * the order in which the entries are presented in the array is an
- * implementation detail and should not be relied upon.
- *
- * @deprecated This function suggests that the elements of a SymmetricTensor
- *   object are stored as a contiguous array, but this is not in fact true
- *   and one should not pretend that this so. As a consequence, this function
- *   is deprecated.
- *
- * @relatesalso ArrayView
- */
-template <int rank, int dim, typename Number>
-DEAL_II_DEPRECATED inline ArrayView<Number>
-make_array_view(SymmetricTensor<rank, dim, Number> &tensor)
-{
-  return make_array_view(tensor.begin_raw(), tensor.end_raw());
 }
 
 
@@ -1268,8 +1146,8 @@ make_array_view(const std::vector<ElementType> &vector)
 
 /**
  * Create a view to a part of a std::vector object. This is equivalent to
- * initializing the ArrayView object with a pointer to the @p starting_index-
- * th element and the @p size_of_view as the length of the view.
+ * initializing the ArrayView object with a pointer to the
+ * @p starting_index-th element and the @p size_of_view as the length of the view.
  *
  * This function is used for non-@p const references to objects of vector
  * type. Such objects contain elements that can be written to. Consequently,
@@ -1302,8 +1180,8 @@ make_array_view(std::vector<ElementType> &vector,
 
 /**
  * Create a view to a part of a std::vector object. This is equivalent to
- * initializing the ArrayView object with a pointer to the @p starting_index-
- * th element and the @p size_of_view as the length of the view.
+ * initializing the ArrayView object with a pointer to the @p starting_index-th
+ * element and the @p size_of_view as the length of the view.
  *
  * This function is used for @p const references to objects of vector type
  * because they contain immutable elements. Consequently, the return type of

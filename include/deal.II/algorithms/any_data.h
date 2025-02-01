@@ -1,25 +1,24 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2014 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_any_data_h
 #define dealii_any_data_h
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/exceptions.h>
-#include <deal.II/base/subscriptor.h>
 
 #include <algorithm>
 #include <any>
@@ -33,7 +32,7 @@ DEAL_II_NAMESPACE_OPEN
  *
  * @todo GK: Deprecate access to AnyData by index and change to a map.
  */
-class AnyData : public Subscriptor
+class AnyData : public EnableObserverPointer
 {
 public:
   /// Default constructor for empty object
@@ -231,7 +230,7 @@ inline type
 AnyData::entry(const unsigned int i)
 {
   AssertIndexRange(i, size());
-  type *p = std::any_cast<type>(&data[i]);
+  const type *p = std::any_cast<type>(&data[i]);
   Assert(p != nullptr,
          ExcTypeMismatch(typeid(type).name(), data[i].type().name()));
   return *p;
@@ -350,7 +349,7 @@ inline type
 AnyData::entry(const std::string &n)
 {
   const unsigned int i = find(n);
-  type              *p = std::any_cast<type>(&data[i]);
+  const type        *p = std::any_cast<type>(&data[i]);
   Assert(p != 0, ExcTypeMismatch(typeid(type).name(), data[i].type().name()));
   return *p;
 }

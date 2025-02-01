@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2006 - 2021 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2019 - 2023 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  */
 
 
@@ -44,6 +43,7 @@ namespace LA
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria_accessor.h>
+#include <deal.II/grid/tria_description.h>
 #include <deal.II/grid/tria_iterator.h>
 
 #include <deal.II/hp/fe_values.h>
@@ -226,7 +226,7 @@ namespace Step27
     // We have not dealt with chains of constraints on ghost cells yet.
     // Thus, we are content with verifying their consistency for now.
     std::vector<IndexSet> locally_owned_dofs_per_processor =
-      Utilities::MPI::all_gather(dof_handler.get_communicator(),
+      Utilities::MPI::all_gather(dof_handler.get_mpi_communicator(),
                                  dof_handler.locally_owned_dofs());
 
     const IndexSet locally_active_dofs =

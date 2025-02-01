@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1999 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_sparse_matrix_templates_h
@@ -56,7 +55,7 @@ SparseMatrix<number>::SparseMatrix()
 
 template <typename number>
 SparseMatrix<number>::SparseMatrix(const SparseMatrix &m)
-  : Subscriptor(m)
+  : EnableObserverPointer(m)
   , cols(nullptr, "SparseMatrix")
   , val(nullptr)
   , max_len(0)
@@ -73,8 +72,8 @@ SparseMatrix<number>::SparseMatrix(const SparseMatrix &m)
 
 template <typename number>
 SparseMatrix<number>::SparseMatrix(SparseMatrix<number> &&m) noexcept
-  : Subscriptor(std::move(m))
-  , cols(m.cols)
+  : EnableObserverPointer(std::move(m))
+  , cols(std::move(m.cols))
   , val(std::move(m.val))
   , max_len(m.max_len)
 {
@@ -161,30 +160,6 @@ SparseMatrix<number>::~SparseMatrix()
 
 
 
-namespace internal
-{
-  namespace SparseMatrixImplementation
-  {
-    using size_type = types::global_dof_index;
-
-    template <typename T>
-    std::enable_if_t<std::is_trivial_v<T>>
-    zero_subrange(const size_type begin, const size_type end, T *dst)
-    {
-      std::memset(dst + begin, 0, (end - begin) * sizeof(T));
-    }
-
-    template <typename T>
-    std::enable_if_t<!std::is_trivial_v<T>>
-    zero_subrange(const size_type begin, const size_type end, T *dst)
-    {
-      std::fill(dst + begin, dst + end, 0);
-    }
-  } // namespace SparseMatrixImplementation
-} // namespace internal
-
-
-
 template <typename number>
 SparseMatrix<number> &
 SparseMatrix<number>::operator=(const double d)
@@ -211,18 +186,13 @@ SparseMatrix<number>::operator=(const double d)
     parallel::apply_to_subranges(
       0U,
       matrix_size,
-      [this](const size_type begin, const size_type end) {
-        internal::SparseMatrixImplementation::zero_subrange(begin,
-                                                            end,
-                                                            val.get());
+      [values = this->val.get()](const size_type begin, const size_type end) {
+        std::fill(values + begin, values + end, number(0.));
       },
       grain_size);
   else if (matrix_size > 0)
     {
-      if constexpr (std::is_trivial_v<number>)
-        std::memset(val.get(), 0, matrix_size * sizeof(number));
-      else
-        std::fill(val.get(), val.get() + matrix_size, 0);
+      std::fill(val.get(), val.get() + matrix_size, 0);
     }
 
   return *this;
@@ -478,6 +448,8 @@ namespace internal
 {
   namespace SparseMatrixImplementation
   {
+    using size_type = types::global_dof_index;
+
     /**
      * Perform a vmult using the SparseMatrix data structures, but only using
      * a subinterval for the row indices.
@@ -616,7 +588,7 @@ SparseMatrix<number>::add(const size_type  row,
         {
           // Use the same algorithm as above, but because the matrix is
           // not square, we can now do without the split for diagonal/
-          // entries before the diagional/entries are the diagonal.
+          // entries before the diagonal/entries are the diagonal.
           size_type counter = 0;
           for (size_type i = 0; i < n_cols; ++i)
             {
@@ -1847,7 +1819,7 @@ SparseMatrix<number>::SSOR(Vector<somenumber> &dst, const number omega) const
 {
   // TODO: Is this called anywhere? If so, multiplication with omega(2-omega)D
   // is missing
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 
   Assert(cols != nullptr, ExcNeedsSparsityPattern());
   Assert(val != nullptr, ExcNotInitialized());

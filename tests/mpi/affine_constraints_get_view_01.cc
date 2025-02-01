@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2023 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 
@@ -192,8 +191,15 @@ test()
     pressure_constraints.distribute(check_vector_2.block(1));
   }
 
-  // Now the assertion part: These vectors are the same:
-  Assert(check_vector_1 == check_vector_2, ExcInternalError());
+  // Finally check that these two vectors are the same. Note that
+  // when we compile with native optimizations we might have a slight
+  // difference in results:
+  {
+    TrilinosWrappers::MPI::BlockVector result = check_vector_1;
+    result -= check_vector_2;
+    Assert(result.l2_norm() / check_vector_1.l2_norm() < 1e-8,
+           ExcInternalError());
+  }
 
   deallog << "OK" << std::endl;
 }

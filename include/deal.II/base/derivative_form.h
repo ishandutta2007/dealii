@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2013 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_derivative_form_h
 #define dealii_derivative_form_h
@@ -141,7 +140,7 @@ public:
   norm() const;
 
   /**
-   * Compute the volume element associated with the jacobian of the
+   * Compute the volume element associated with the Jacobian of the
    * transformation $\mathbf F$. That is to say if $DF$ is square, it computes
    * $\det(DF)$, in case DF is not square returns $\sqrt{\det(DF^T \,DF)}$.
    */
@@ -610,9 +609,7 @@ template <int dim, int spacedim, typename Number>
 inline DerivativeForm<1, spacedim, dim, Number>
 transpose(const DerivativeForm<1, dim, spacedim, Number> &DF)
 {
-  DerivativeForm<1, spacedim, dim, Number> tt;
-  tt = DF.transpose();
-  return tt;
+  return DF.transpose();
 }
 
 
@@ -686,6 +683,34 @@ apply_diagonal_transformation(
          Tensor<1, spacedim, typename ProductType<Number1, Number2>::type>>
     dest;
   for (unsigned int i = 0; i < n_components; ++i)
+    dest[i] = apply_diagonal_transformation(grad_F, D_X[i]);
+
+  return dest;
+}
+
+
+
+/**
+ * Similar to the previous apply_transformation().
+ * Each row of the result corresponds to one of the rows of @p D_X transformed
+ * by @p grad_F, equivalent to $\mathrm{D\_X} \, \mathrm{grad\_F}^T$ in matrix
+ * notation.
+ *
+ * @relatesalso DerivativeForm
+ */
+// rank=2
+template <int spacedim, int dim, typename Number1, typename Number2>
+inline DerivativeForm<1,
+                      spacedim,
+                      dim,
+                      typename ProductType<Number1, Number2>::type>
+apply_diagonal_transformation(
+  const DerivativeForm<1, dim, spacedim, Number1> &grad_F,
+  const Tensor<2, dim, Number2>                   &D_X)
+{
+  DerivativeForm<1, spacedim, dim, typename ProductType<Number1, Number2>::type>
+    dest;
+  for (unsigned int i = 0; i < dim; ++i)
     dest[i] = apply_diagonal_transformation(grad_F, D_X[i]);
 
   return dest;

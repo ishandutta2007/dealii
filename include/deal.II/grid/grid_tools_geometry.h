@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2023 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_grid_tools_geometry_h
 #define dealii_grid_tools_geometry_h
@@ -70,7 +69,7 @@ namespace GridTools
    *
    * This function also works for objects of type
    * parallel::distributed::Triangulation, in which case the function is a
-   * collective operation.
+   * @ref GlossCollectiveOperation "collective operation".
    *
    * @param tria The triangulation.
    * @return The dim-dimensional measure of the domain described by the
@@ -96,7 +95,7 @@ namespace GridTools
    *
    * This function also works for objects of type
    * parallel::distributed::Triangulation, in which case the function is a
-   * collective operation.
+   * @ref GlossCollectiveOperation "collective operation".
    *
    * @param tria The triangulation.
    * @param mapping The Mapping which computes the Jacobians used to
@@ -594,6 +593,8 @@ namespace GridTools
     }
   } // namespace internal
 
+
+
   template <typename Iterator>
   Point<Iterator::AccessorType::space_dimension>
   project_to_object(
@@ -874,7 +875,7 @@ namespace GridTools
       }
     else
       {
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return projected_point;
       }
 

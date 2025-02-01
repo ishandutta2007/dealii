@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1999 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/table_handler.h>
 
@@ -91,7 +90,10 @@ namespace internal
     else
       ss.setf(std::ios::fixed, std::ios::floatfield);
 
-    std::visit([&ss](auto &v) { ss << v; }, value);
+    if (scientific)
+      ss << get_numeric_value();
+    else
+      std::visit([&ss](const auto &v) { ss << v; }, value);
 
     cached_value = ss.str();
     if (cached_value.empty())
@@ -156,7 +158,7 @@ TableHandler::Column::pad_column_below(const unsigned int size)
   while (entries.size() < size)
     {
       entries.push_back(entries.back().get_default_constructed_copy());
-      internal::TableEntry &entry = entries.back();
+      const internal::TableEntry &entry = entries.back();
       entry.cache_string(scientific, precision);
       max_length =
         std::max(max_length,
@@ -219,7 +221,7 @@ TableHandler::start_new_row()
     while (column.second.entries.size() < max_col_length)
       {
         column.second.entries.emplace_back("");
-        internal::TableEntry &entry = column.second.entries.back();
+        const internal::TableEntry &entry = column.second.entries.back();
         entry.cache_string(column.second.scientific, column.second.precision);
         column.second.max_length =
           std::max(column.second.max_length,
@@ -275,7 +277,7 @@ TableHandler::add_column_to_supercolumn(const std::string &key,
       tex_supercaptions.insert(new_tex_supercaption);
     }
   else
-    Assert(false, ExcInternalError());
+    DEAL_II_ASSERT_UNREACHABLE();
 }
 
 
@@ -561,7 +563,7 @@ TableHandler::write_text(std::ostream &out, const TextOutputFormat format) const
         }
 
       default:
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
     }
 
 
@@ -702,7 +704,8 @@ TableHandler::write_tex(std::ostream &out, const bool with_header) const
           else
             out.setf(std::ios::fixed, std::ios::floatfield);
 
-          std::visit([&out](auto &v) { out << v; }, column.entries[i].value);
+          std::visit([&out](const auto &v) { out << v; },
+                     column.entries[i].value);
 
           if (j < n_cols - 1)
             out << " & ";

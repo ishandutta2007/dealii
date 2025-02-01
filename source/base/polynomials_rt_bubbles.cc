@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2018 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/polynomials_rt_bubbles.h>
@@ -126,14 +125,14 @@ PolynomialsRT_Bubbles<dim>::evaluate(
       //  monoval_i = x^i,
       //  monoval_plus = x^(k+1)
       for (unsigned int d = 0; d < dim; ++d)
-        monomials[my_degree + 1].value(unit_point(d),
+        monomials[my_degree + 1].value(unit_point[d],
                                        n_derivatives,
                                        monoval_plus[d]);
 
       for (unsigned int i = 0; i <= my_degree; ++i, ++start)
         {
           for (unsigned int d = 0; d < dim; ++d)
-            monomials[i].value(unit_point(d), n_derivatives, monoval_i[d]);
+            monomials[i].value(unit_point[d], n_derivatives, monoval_i[d]);
 
           if (values.size() != 0)
             {
@@ -216,10 +215,10 @@ PolynomialsRT_Bubbles<dim>::evaluate(
       //  monoval_* = x^*, monoval_jplus = x^(j+1)
       for (unsigned int d = 0; d < dim; ++d)
         {
-          monomials[my_degree + 1].value(unit_point(d),
+          monomials[my_degree + 1].value(unit_point[d],
                                          n_derivatives,
                                          monoval_plus[d]);
-          monomials[my_degree].value(unit_point(d), n_derivatives, monoval[d]);
+          monomials[my_degree].value(unit_point[d], n_derivatives, monoval[d]);
         }
 
       const unsigned int n_curls = (my_degree + 1) * (2 * my_degree + 1);
@@ -227,16 +226,16 @@ PolynomialsRT_Bubbles<dim>::evaluate(
       for (unsigned int i = 0; i <= my_degree; ++i)
         {
           for (unsigned int d = 0; d < dim; ++d)
-            monomials[i].value(unit_point(d), n_derivatives, monoval_i[d]);
+            monomials[i].value(unit_point[d], n_derivatives, monoval_i[d]);
 
           for (unsigned int j = 0; j <= my_degree; ++j)
             {
               for (unsigned int d = 0; d < dim; ++d)
                 {
-                  monomials[j].value(unit_point(d),
+                  monomials[j].value(unit_point[d],
                                      n_derivatives,
                                      monoval_j[d]);
-                  monomials[j + 1].value(unit_point(d),
+                  monomials[j + 1].value(unit_point[d],
                                          n_derivatives,
                                          monoval_jplus[d]);
                 }
@@ -844,7 +843,7 @@ PolynomialsRT_Bubbles<dim>::n_polynomials(const unsigned int k)
   if (dim == 1 || dim == 2 || dim == 3)
     return dim * Utilities::fixed_power<dim>(k + 1);
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return 0;
 }
 

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1998 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_error_estimator_templates_h
 #define dealii_error_estimator_templates_h
@@ -194,8 +193,8 @@ namespace internal
 
     /**
      * Resize the arrays so that they fit the number of quadrature points
-     * associated with the given finite element index into the hp-
-     * collections.
+     * associated with the given finite element index into the
+     * hp-collections.
      */
     void
     resize(const unsigned int active_fe_index);
@@ -512,7 +511,7 @@ namespace internal
           }
         default:
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             return std::numeric_limits<double>::lowest();
           }
       }
@@ -556,7 +555,7 @@ namespace internal
           }
         default:
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             return std::numeric_limits<double>::lowest();
           }
       }
@@ -602,7 +601,7 @@ namespace internal
           }
         default:
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             return std::numeric_limits<double>::lowest();
           }
       }
@@ -637,7 +636,7 @@ namespace internal
           }
         default:
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             return std::numeric_limits<double>::lowest();
           }
       }
@@ -833,7 +832,7 @@ namespace internal
       }
 
     // finally loop over all subfaces to collect the contributions of the
-    // subfaces and store them with the mother face
+    // subfaces and store them with the parent face
     std::vector<double> sum(n_solution_vectors, 0);
     for (unsigned int subface_no = 0; subface_no < face->n_children();
          ++subface_no)

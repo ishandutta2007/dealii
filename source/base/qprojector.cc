@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2020 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/derivative_form.h>
 #include <deal.II/base/geometry_info.h>
@@ -31,10 +30,10 @@ namespace internal
   {
     namespace
     {
+      // Reflect points across the y = x line.
       std::vector<Point<2>>
       reflect(const std::vector<Point<2>> &points)
       {
-        // Take the points and reflect them by the diagonal
         std::vector<Point<2>> q_points;
         q_points.reserve(points.size());
         for (const Point<2> &p : points)
@@ -44,6 +43,8 @@ namespace internal
       }
 
 
+      // Rotate points in the plane around the positive z axis (i.e.,
+      // counter-clockwise).
       std::vector<Point<2>>
       rotate(const std::vector<Point<2>> &points, const unsigned int n_times)
       {
@@ -129,7 +130,7 @@ namespace internal
               eta_translation = int(subface_no / 2) * 0.5;
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
               break;
           }
 
@@ -138,58 +139,59 @@ namespace internal
         for (const Point<2> &p : points)
           {
             Point<3> cell_point;
-            cell_point[xi_index]    = xi_scale * p(0) + xi_translation;
-            cell_point[eta_index]   = eta_scale * p(1) + eta_translation;
+            cell_point[xi_index]    = xi_scale * p[0] + xi_translation;
+            cell_point[eta_index]   = eta_scale * p[1] + eta_translation;
             cell_point[const_index] = const_value;
             q_points.push_back(cell_point);
           }
       }
 
       std::vector<Point<2>>
-      mutate_points_with_offset(const std::vector<Point<2>> &points,
-                                const unsigned int           offset)
+      mutate_points_with_offset(
+        const std::vector<Point<2>>       &points,
+        const types::geometric_orientation combined_orientation)
       {
-        switch (offset)
+        // These rotations are backwards (relative to the standard notion of,
+        // e.g., what rotation index 7 means) since they are rotations about the
+        // positive z axis in 2d: i.e., they are done from the perspective of
+        // 'inside' a cell instead of the perspective of an abutting cell.
+        //
+        // For example: consider points on face 4 of a hexahedron with
+        // orientation 3. In 2d, rotating such points clockwise is the same as
+        // rotating them counter-clockwise from the perspective of the abutting
+        // face. Hence, such points must be rotated 90 degrees
+        // counter-clockwise.
+        switch (combined_orientation)
           {
             case 0:
-              return points;
-            case 1:
-            case 2:
-            case 3:
-              return rotate(points, offset);
-            case 4:
               return reflect(points);
-            case 5:
+            case 2:
+              return rotate(reflect(points), 3);
+            case 4:
+              return rotate(reflect(points), 2);
             case 6:
+              return rotate(reflect(points), 1);
+            case 1:
+              return points;
+            case 3:
+              return rotate(points, 1);
+            case 5:
+              return rotate(points, 2);
             case 7:
-              return rotate(reflect(points), 8 - offset);
+              return rotate(points, 3);
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
         return {};
       }
 
       Quadrature<2>
-      mutate_quadrature(const Quadrature<2> &quadrature,
-                        const bool           face_orientation,
-                        const bool           face_flip,
-                        const bool           face_rotation)
+      mutate_quadrature(const Quadrature<2>               &quadrature,
+                        const types::geometric_orientation combined_orientation)
       {
-        static const unsigned int offset[2][2][2] = {
-          {{4, 5},   // face_orientation=false; face_flip=false;
-                     // face_rotation=false and true
-           {6, 7}},  // face_orientation=false; face_flip=true;
-                     // face_rotation=false and true
-          {{0, 1},   // face_orientation=true;  face_flip=false;
-                     // face_rotation=false and true
-           {2, 3}}}; // face_orientation=true; face_flip=true;
-                     // face_rotation=false and true
-
-        return Quadrature<2>(
-          mutate_points_with_offset(
-            quadrature.get_points(),
-            offset[face_orientation][face_flip][face_rotation]),
-          quadrature.get_weights());
+        return Quadrature<2>(mutate_points_with_offset(quadrature.get_points(),
+                                                       combined_orientation),
+                             quadrature.get_weights());
       }
 
       std::pair<unsigned int, RefinementCase<2>>
@@ -376,17 +378,17 @@ QProjector<2>::project_to_face(const ReferenceCell   &reference_cell,
         switch (face_no)
           {
             case 0:
-              q_points[p] = Point<dim>(quadrature.point(p)(0), 0);
+              q_points[p] = Point<dim>(quadrature.point(p)[0], 0);
               break;
             case 1:
               q_points[p] =
-                Point<dim>(1 - quadrature.point(p)(0), quadrature.point(p)(0));
+                Point<dim>(1 - quadrature.point(p)[0], quadrature.point(p)[0]);
               break;
             case 2:
-              q_points[p] = Point<dim>(0, 1 - quadrature.point(p)(0));
+              q_points[p] = Point<dim>(0, 1 - quadrature.point(p)[0]);
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
     }
   else if (reference_cell == ReferenceCells::Quadrilateral)
@@ -395,24 +397,24 @@ QProjector<2>::project_to_face(const ReferenceCell   &reference_cell,
         switch (face_no)
           {
             case 0:
-              q_points[p] = Point<dim>(0, quadrature.point(p)(0));
+              q_points[p] = Point<dim>(0, quadrature.point(p)[0]);
               break;
             case 1:
-              q_points[p] = Point<dim>(1, quadrature.point(p)(0));
+              q_points[p] = Point<dim>(1, quadrature.point(p)[0]);
               break;
             case 2:
-              q_points[p] = Point<dim>(quadrature.point(p)(0), 0);
+              q_points[p] = Point<dim>(quadrature.point(p)[0], 0);
               break;
             case 3:
-              q_points[p] = Point<dim>(quadrature.point(p)(0), 1);
+              q_points[p] = Point<dim>(quadrature.point(p)[0], 1);
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
     }
   else
     {
-      Assert(false, ExcInternalError());
+      DEAL_II_ASSERT_UNREACHABLE();
     }
 }
 
@@ -464,7 +466,10 @@ QProjector<3>::project_to_oriented_face(const ReferenceCell &reference_cell,
   Assert(reference_cell == ReferenceCells::Hexahedron, ExcNotImplemented());
 
   const Quadrature<2> mutation = internal::QProjector::mutate_quadrature(
-    quadrature, face_orientation, face_flip, face_rotation);
+    quadrature,
+    internal::combined_face_orientation(face_orientation,
+                                        face_rotation,
+                                        face_flip));
 
   return QProjector<3>::project_to_face(reference_cell, mutation, face_no);
 }
@@ -519,47 +524,47 @@ QProjector<2>::project_to_subface(const ReferenceCell   &reference_cell,
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(quadrature.point(p)(0) / 2, 0);
+                    q_points[p] = Point<dim>(quadrature.point(p)[0] / 2, 0);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(0.5 + quadrature.point(p)(0) / 2, 0);
+                      Point<dim>(0.5 + quadrature.point(p)[0] / 2, 0);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             case 1:
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(1 - quadrature.point(p)(0) / 2,
-                                             quadrature.point(p)(0) / 2);
+                    q_points[p] = Point<dim>(1 - quadrature.point(p)[0] / 2,
+                                             quadrature.point(p)[0] / 2);
                     break;
                   case 1:
-                    q_points[p] = Point<dim>(0.5 - quadrature.point(p)(0) / 2,
-                                             0.5 + quadrature.point(p)(0) / 2);
+                    q_points[p] = Point<dim>(0.5 - quadrature.point(p)[0] / 2,
+                                             0.5 + quadrature.point(p)[0] / 2);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             case 2:
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(0, 1 - quadrature.point(p)(0) / 2);
+                    q_points[p] = Point<dim>(0, 1 - quadrature.point(p)[0] / 2);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(0, 0.5 - quadrature.point(p)(0) / 2);
+                      Point<dim>(0, 0.5 - quadrature.point(p)[0] / 2);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
     }
   else if (reference_cell == ReferenceCells::Quadrilateral)
@@ -571,66 +576,66 @@ QProjector<2>::project_to_subface(const ReferenceCell   &reference_cell,
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(0, quadrature.point(p)(0) / 2);
+                    q_points[p] = Point<dim>(0, quadrature.point(p)[0] / 2);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(0, quadrature.point(p)(0) / 2 + 0.5);
+                      Point<dim>(0, quadrature.point(p)[0] / 2 + 0.5);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             case 1:
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(1, quadrature.point(p)(0) / 2);
+                    q_points[p] = Point<dim>(1, quadrature.point(p)[0] / 2);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(1, quadrature.point(p)(0) / 2 + 0.5);
+                      Point<dim>(1, quadrature.point(p)[0] / 2 + 0.5);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             case 2:
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(quadrature.point(p)(0) / 2, 0);
+                    q_points[p] = Point<dim>(quadrature.point(p)[0] / 2, 0);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(quadrature.point(p)(0) / 2 + 0.5, 0);
+                      Point<dim>(quadrature.point(p)[0] / 2 + 0.5, 0);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
             case 3:
               switch (subface_no)
                 {
                   case 0:
-                    q_points[p] = Point<dim>(quadrature.point(p)(0) / 2, 1);
+                    q_points[p] = Point<dim>(quadrature.point(p)[0] / 2, 1);
                     break;
                   case 1:
                     q_points[p] =
-                      Point<dim>(quadrature.point(p)(0) / 2 + 0.5, 1);
+                      Point<dim>(quadrature.point(p)[0] / 2 + 0.5, 1);
                     break;
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                 }
               break;
 
             default:
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
           }
     }
   else
     {
-      Assert(false, ExcInternalError());
+      DEAL_II_ASSERT_UNREACHABLE();
     }
 }
 
@@ -697,7 +702,10 @@ QProjector<3>::project_to_oriented_subface(
   Assert(reference_cell == ReferenceCells::Hexahedron, ExcNotImplemented());
 
   const Quadrature<2> mutation = internal::QProjector::mutate_quadrature(
-    quadrature, face_orientation, face_flip, face_rotation);
+    quadrature,
+    internal::combined_face_orientation(face_orientation,
+                                        face_rotation,
+                                        face_flip));
 
   const std::pair<unsigned int, RefinementCase<2>>
     final_subface_no_and_ref_case =
@@ -904,6 +912,8 @@ QProjector<3>::project_to_all_faces(const ReferenceCell      &reference_cell,
     // loop over all faces (triangles) ...
     for (unsigned int face_no = 0; face_no < faces.size(); ++face_no)
       {
+        const ReferenceCell face_reference_cell =
+          reference_cell.face_reference_cell(face_no);
         // We will use linear polynomials to map the reference quadrature
         // points correctly to on faces. There are as many linear shape
         // functions as there are vertices in the face.
@@ -916,15 +926,36 @@ QProjector<3>::project_to_all_faces(const ReferenceCell      &reference_cell,
              static_cast<const ScalarPolynomialsBase<2> &>(poly_quad));
 
         // ... and over all possible orientations
-        for (unsigned char orientation = 0;
+        for (types::geometric_orientation orientation = 0;
              orientation < reference_cell.n_face_orientations(face_no);
              ++orientation)
           {
             const auto &face = faces[face_no];
 
+            // The goal of this function is to compute identical sets of
+            // quadrature points on the common face of two abutting cells. Our
+            // orientation convention is that, given such a pair of abutting
+            // cells:
+            //
+            // 1. The shared face, from the perspective of the first cell, is
+            //    in the default orientation.
+            // 2. The shared face, from the perspective of the second cell, has
+            //    its orientation computed relative to the first cell: i.e.,
+            //    'orientation' is the vertex permutation applied to the first
+            //    cell's face to get the second cell's face.
+            //
+            // The first case is trivial since points do not need to be
+            // oriented. However, in the second case, we need to use the
+            // *reverse* of the stored orientation (i.e., the permutation
+            // applied to the second cell's face which yields the first cell's
+            // face) so that we get identical quadrature points.
+            //
+            // For more information see connectivity.h.
             const boost::container::small_vector<Point<3>, 8> support_points =
-              reference_cell.face_reference_cell(face_no)
-                .permute_by_combined_orientation<Point<3>>(face, orientation);
+              face_reference_cell.permute_by_combined_orientation<Point<3>>(
+                face,
+                face_reference_cell.get_inverse_combined_orientation(
+                  orientation));
 
             // the quadrature rule to be projected ...
             const auto &sub_quadrature_points =
@@ -1026,7 +1057,7 @@ QProjector<3>::project_to_all_faces(const ReferenceCell      &reference_cell,
       std::vector<double> weights;
       weights.reserve(n_points_total);
 
-      for (unsigned int offset = 0; offset < 8; ++offset)
+      for (unsigned char offset = 0; offset < 8; ++offset)
         {
           const auto mutation = internal::QProjector::mutate_points_with_offset(
             quadrature[0].get_points(), offset);
@@ -1182,7 +1213,7 @@ QProjector<3>::project_to_all_subfaces(const ReferenceCell &reference_cell,
 
   // do the following for all possible mutations of a face (mutation==0
   // corresponds to a face with standard orientation, no flip and no rotation)
-  for (unsigned int offset = 0; offset < 8; ++offset)
+  for (unsigned char offset = 0; offset < 8; ++offset)
     {
       const auto mutation =
         internal::QProjector::mutate_points_with_offset(quadrature.get_points(),
@@ -1304,7 +1335,7 @@ QProjector<dim>::project_to_line(const ReferenceCell &reference_cell,
 
   for (unsigned int k = 0; k < n; ++k)
     {
-      const double alpha = quadrature.point(k)(0);
+      const double alpha = quadrature.point(k)[0];
       points[k]          = alpha * p2;
       points[k] += (1. - alpha) * p1;
       weights[k] = length * quadrature.weight(k);
@@ -1323,21 +1354,42 @@ QProjector<dim>::DataSetDescriptor::face(const ReferenceCell &reference_cell,
                                          const bool           face_rotation,
                                          const unsigned int n_quadrature_points)
 {
+  return face(reference_cell,
+              face_no,
+              internal::combined_face_orientation(face_orientation,
+                                                  face_rotation,
+                                                  face_flip),
+              n_quadrature_points);
+}
+
+
+
+template <int dim>
+typename QProjector<dim>::DataSetDescriptor
+QProjector<dim>::DataSetDescriptor::face(
+  const ReferenceCell               &reference_cell,
+  const unsigned int                 face_no,
+  const types::geometric_orientation combined_orientation,
+  const unsigned int                 n_quadrature_points)
+{
+  // TODO: once we move to representing the default orientation as 0 (instead of
+  // 1) we can get rid of the dim = 1 check
+  Assert(dim == 1 ||
+           (combined_orientation < reference_cell.n_face_orientations(face_no)),
+         ExcInternalError());
   if (reference_cell == ReferenceCells::Triangle ||
       reference_cell == ReferenceCells::Tetrahedron)
     {
       if (dim == 2)
-        return {(2 * face_no + (face_orientation ? 1 : 0)) *
+        return {(2 * face_no + (combined_orientation ==
+                                    numbers::default_geometric_orientation ?
+                                  1 :
+                                  0)) *
                 n_quadrature_points};
       else if (dim == 3)
         {
-          const unsigned char orientation =
-            internal::combined_face_orientation(face_orientation,
-                                                face_rotation,
-                                                face_flip);
-          Assert(orientation < 6, ExcInternalError());
           return {(reference_cell.n_face_orientations(face_no) * face_no +
-                   orientation) *
+                   combined_orientation) *
                   n_quadrature_points};
         }
     }
@@ -1352,55 +1404,12 @@ QProjector<dim>::DataSetDescriptor::face(const ReferenceCell &reference_cell,
       case 1:
       case 2:
         return face_no * n_quadrature_points;
-
-
       case 3:
-        {
-          // in 3d, we have to account for faces that
-          // have non-standard face orientation, flip
-          // and rotation. thus, we have to store
-          // _eight_ data sets per face or subface
-
-          // set up a table with the according offsets
-          // for non-standard orientation, first index:
-          // face_orientation (standard true=1), second
-          // index: face_flip (standard false=0), third
-          // index: face_rotation (standard false=0)
-          //
-          // note, that normally we should use the
-          // obvious offsets 0,1,2,3,4,5,6,7. However,
-          // prior to the changes enabling flipped and
-          // rotated faces, in many places of the
-          // library the convention was used, that the
-          // first dataset with offset 0 corresponds to
-          // a face in standard orientation. therefore
-          // we use the offsets 4,5,6,7,0,1,2,3 here to
-          // stick to that (implicit) convention
-          static const unsigned int offset[2][2][2] = {
-            {{4 * GeometryInfo<dim>::faces_per_cell,
-              5 * GeometryInfo<dim>::
-                    faces_per_cell}, // face_orientation=false; face_flip=false;
-                                     // face_rotation=false and true
-             {6 * GeometryInfo<dim>::faces_per_cell,
-              7 * GeometryInfo<dim>::
-                    faces_per_cell}}, // face_orientation=false; face_flip=true;
-                                      // face_rotation=false and true
-            {{0 * GeometryInfo<dim>::faces_per_cell,
-              1 * GeometryInfo<dim>::
-                    faces_per_cell}, // face_orientation=true;  face_flip=false;
-                                     // face_rotation=false and true
-             {2 * GeometryInfo<dim>::faces_per_cell,
-              3 * GeometryInfo<dim>::
-                    faces_per_cell}}}; // face_orientation=true; face_flip=true;
-                                       // face_rotation=false and true
-
-          return (
-            (face_no + offset[face_orientation][face_flip][face_rotation]) *
-            n_quadrature_points);
-        }
-
+        return (face_no +
+                GeometryInfo<dim>::faces_per_cell * combined_orientation) *
+               n_quadrature_points;
       default:
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
     }
   return numbers::invalid_unsigned_int;
 }
@@ -1417,12 +1426,32 @@ QProjector<dim>::DataSetDescriptor::face(
   const bool                      face_rotation,
   const hp::QCollection<dim - 1> &quadrature)
 {
+  return face(reference_cell,
+              face_no,
+              internal::combined_face_orientation(face_orientation,
+                                                  face_rotation,
+                                                  face_flip),
+              quadrature);
+}
+
+
+
+template <int dim>
+typename QProjector<dim>::DataSetDescriptor
+QProjector<dim>::DataSetDescriptor::face(
+  const ReferenceCell               &reference_cell,
+  const unsigned int                 face_no,
+  const types::geometric_orientation combined_orientation,
+  const hp::QCollection<dim - 1>    &quadrature)
+{
   if (reference_cell == ReferenceCells::Triangle ||
       reference_cell == ReferenceCells::Tetrahedron ||
       reference_cell == ReferenceCells::Wedge ||
       reference_cell == ReferenceCells::Pyramid)
     {
       unsigned int offset = 0;
+      Assert(combined_orientation < reference_cell.n_face_orientations(face_no),
+             ExcInternalError());
 
       static const unsigned int X = numbers::invalid_unsigned_int;
       static const std::array<unsigned int, 5> scale_tri   = {{2, 2, 2, X, X}};
@@ -1446,15 +1475,14 @@ QProjector<dim>::DataSetDescriptor::face(
           offset += scale[i] * quadrature[i].size();
 
       if (dim == 2)
-        return {offset +
-                face_orientation *
-                  quadrature[quadrature.size() == 1 ? 0 : face_no].size()};
+        return {
+          offset +
+          (combined_orientation == numbers::default_geometric_orientation) *
+            quadrature[quadrature.size() == 1 ? 0 : face_no].size()};
       else if (dim == 3)
         {
           return {offset +
-                  internal::combined_face_orientation(face_orientation,
-                                                      face_rotation,
-                                                      face_flip) *
+                  combined_orientation *
                     quadrature[quadrature.size() == 1 ? 0 : face_no].size()};
         }
     }
@@ -1481,41 +1509,9 @@ QProjector<dim>::DataSetDescriptor::face(
         }
       case 3:
         {
-          // in 3d, we have to account for faces that
-          // have non-standard face orientation, flip
-          // and rotation. thus, we have to store
-          // _eight_ data sets per face or subface
-
-          // set up a table with the according offsets
-          // for non-standard orientation, first index:
-          // face_orientation (standard true=1), second
-          // index: face_flip (standard false=0), third
-          // index: face_rotation (standard false=0)
-          //
-          // note, that normally we should use the
-          // obvious offsets 0,1,2,3,4,5,6,7. However,
-          // prior to the changes enabling flipped and
-          // rotated faces, in many places of the
-          // library the convention was used, that the
-          // first dataset with offset 0 corresponds to
-          // a face in standard orientation. therefore
-          // we use the offsets 4,5,6,7,0,1,2,3 here to
-          // stick to that (implicit) convention
-          static const unsigned int offset[2][2][2] = {
-            {{4, 5},   // face_orientation=false; face_flip=false;
-                       // face_rotation=false and true
-             {6, 7}},  // face_orientation=false; face_flip=true;
-                       // face_rotation=false and true
-            {{0, 1},   // face_orientation=true;  face_flip=false;
-                       // face_rotation=false and true
-             {2, 3}}}; // face_orientation=true; face_flip=true;
-                       // face_rotation=false and true
-
-
           if (quadrature.size() == 1)
             return (face_no +
-                    offset[face_orientation][face_flip][face_rotation] *
-                      GeometryInfo<dim>::faces_per_cell) *
+                    combined_orientation * GeometryInfo<dim>::faces_per_cell) *
                    quadrature[0].size();
           else
             {
@@ -1528,16 +1524,39 @@ QProjector<dim>::DataSetDescriptor::face(
                    ++i)
                 n_points += quadrature[i].size();
 
-              return (n_points_i +
-                      offset[face_orientation][face_flip][face_rotation] *
-                        n_points);
+              return n_points_i + combined_orientation * n_points;
             }
         }
 
       default:
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
     }
   return numbers::invalid_unsigned_int;
+}
+
+
+
+template <int dim>
+typename QProjector<dim>::DataSetDescriptor
+QProjector<dim>::DataSetDescriptor::subface(
+  const ReferenceCell             &reference_cell,
+  const unsigned int               face_no,
+  const unsigned int               subface_no,
+  const bool                       face_orientation,
+  const bool                       face_flip,
+  const bool                       face_rotation,
+  const unsigned int               n_quadrature_points,
+  const internal::SubfaceCase<dim> ref_case)
+{
+  return QProjector<dim>::DataSetDescriptor::subface(
+    reference_cell,
+    face_no,
+    subface_no,
+    internal::combined_face_orientation(face_orientation,
+                                        face_rotation,
+                                        face_flip),
+    n_quadrature_points,
+    ref_case);
 }
 
 
@@ -1548,9 +1567,7 @@ QProjector<1>::DataSetDescriptor::subface(
   const ReferenceCell &reference_cell,
   const unsigned int   face_no,
   const unsigned int   subface_no,
-  const bool,
-  const bool,
-  const bool,
+  const types::geometric_orientation /*combined_orientation*/,
   const unsigned int n_quadrature_points,
   const internal::SubfaceCase<1>)
 {
@@ -1573,9 +1590,7 @@ QProjector<2>::DataSetDescriptor::subface(
   const ReferenceCell &reference_cell,
   const unsigned int   face_no,
   const unsigned int   subface_no,
-  const bool,
-  const bool,
-  const bool,
+  const types::geometric_orientation /*combined_orientation*/,
   const unsigned int n_quadrature_points,
   const internal::SubfaceCase<2>)
 {
@@ -1595,16 +1610,17 @@ QProjector<2>::DataSetDescriptor::subface(
 template <>
 QProjector<3>::DataSetDescriptor
 QProjector<3>::DataSetDescriptor::subface(
-  const ReferenceCell           &reference_cell,
-  const unsigned int             face_no,
-  const unsigned int             subface_no,
-  const bool                     face_orientation,
-  const bool                     face_flip,
-  const bool                     face_rotation,
-  const unsigned int             n_quadrature_points,
-  const internal::SubfaceCase<3> ref_case)
+  const ReferenceCell               &reference_cell,
+  const unsigned int                 face_no,
+  const unsigned int                 subface_no,
+  const types::geometric_orientation combined_orientation,
+  const unsigned int                 n_quadrature_points,
+  const internal::SubfaceCase<3>     ref_case)
 {
   const unsigned int dim = 3;
+
+  const auto [face_orientation, face_rotation, face_flip] =
+    internal::split_face_orientation(combined_orientation);
 
   Assert(reference_cell == ReferenceCells::Hexahedron, ExcNotImplemented());
   (void)reference_cell;
@@ -1613,60 +1629,15 @@ QProjector<3>::DataSetDescriptor::subface(
   Assert(subface_no < GeometryInfo<dim>::max_children_per_face,
          ExcInternalError());
 
-  // As the quadrature points created by
-  // QProjector are on subfaces in their
-  // "standard location" we have to use a
-  // permutation of the equivalent subface
-  // number in order to respect face
-  // orientation, flip and rotation. The
-  // information we need here is exactly the
-  // same as the
-  // GeometryInfo<3>::child_cell_on_face info
-  // for the bottom face (face 4) of a hex, as
-  // on this the RefineCase of the cell matches
-  // that of the face and the subfaces are
-  // numbered in the same way as the child
-  // cells.
-
   // in 3d, we have to account for faces that
-  // have non-standard face orientation, flip
-  // and rotation. thus, we have to store
-  // _eight_ data sets per face or subface
-  // already for the isotropic
+  // have non-standard orientation. thus, we
+  // have to store _eight_ data sets per face
+  // or subface already for the isotropic
   // case. Additionally, we have three
   // different refinement cases, resulting in
   // <tt>4 + 2 + 2 = 8</tt> different subfaces
   // for each face.
   const unsigned int total_subfaces_per_face = 8;
-
-  // set up a table with the according offsets
-  // for non-standard orientation, first index:
-  // face_orientation (standard true=1), second
-  // index: face_flip (standard false=0), third
-  // index: face_rotation (standard false=0)
-  //
-  // note, that normally we should use the
-  // obvious offsets 0,1,2,3,4,5,6,7. However,
-  // prior to the changes enabling flipped and
-  // rotated faces, in many places of the
-  // library the convention was used, that the
-  // first dataset with offset 0 corresponds to
-  // a face in standard orientation. therefore
-  // we use the offsets 4,5,6,7,0,1,2,3 here to
-  // stick to that (implicit) convention
-  static const unsigned int orientation_offset[2][2][2] = {
-    {// face_orientation=false; face_flip=false; face_rotation=false and true
-     {4 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face,
-      5 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face},
-     // face_orientation=false; face_flip=true;  face_rotation=false and true
-     {6 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face,
-      7 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face}},
-    {// face_orientation=true;  face_flip=false; face_rotation=false and true
-     {0 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face,
-      1 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face},
-     // face_orientation=true;  face_flip=true;  face_rotation=false and true
-     {2 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face,
-      3 * GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face}}};
 
   // set up a table with the offsets for a
   // given refinement case respecting the
@@ -1694,11 +1665,12 @@ QProjector<3>::DataSetDescriptor::subface(
       internal::QProjector::select_subface_no_and_refinement_case(
         subface_no, face_orientation, face_flip, face_rotation, ref_case);
 
-  return (((face_no * total_subfaces_per_face +
-            ref_case_offset[final_subface_no_and_ref_case.second - 1] +
-            final_subface_no_and_ref_case.first) +
-           orientation_offset[face_orientation][face_flip][face_rotation]) *
-          n_quadrature_points);
+  return ((face_no * total_subfaces_per_face +
+           ref_case_offset[final_subface_no_and_ref_case.second - 1] +
+           final_subface_no_and_ref_case.first) +
+          GeometryInfo<dim>::faces_per_cell * total_subfaces_per_face *
+            combined_orientation) *
+         n_quadrature_points;
 }
 
 

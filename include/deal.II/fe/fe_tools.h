@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2000 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_fe_tools_H
 #define dealii_fe_tools_H
@@ -20,9 +19,9 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/geometry_info.h>
-#include <deal.II/base/subscriptor.h>
 #include <deal.II/base/symmetric_tensor.h>
 #include <deal.II/base/tensor.h>
 
@@ -86,7 +85,7 @@ namespace FETools
    * FETools::add_fe_name() functions.
    */
   template <int dim, int spacedim = dim>
-  class FEFactoryBase : public Subscriptor
+  class FEFactoryBase : public EnableObserverPointer
   {
   public:
     /**
@@ -365,7 +364,7 @@ namespace FETools
    * @param fe The finite element for which to compute these matrices.
    *
    * @param matrices An array of <i>GeometryInfo<dim>::subfaces_per_face =
-   * 2<sup>dim-1</sup></i> FullMatrix objects,holding the embedding matrix for
+   * 2<sup>dim-1</sup></i> FullMatrix objects, holding the embedding matrix for
    * each subface.
    *
    * @param face_coarse The number of the face on the coarse side of the face
@@ -382,12 +381,11 @@ namespace FETools
    */
   template <int dim, typename number, int spacedim>
   void
-  compute_face_embedding_matrices(
-    const FiniteElement<dim, spacedim> &fe,
-    FullMatrix<number> (&matrices)[GeometryInfo<dim>::max_children_per_face],
-    const unsigned int face_coarse,
-    const unsigned int face_fine,
-    const double       threshold = 1.e-12);
+  compute_face_embedding_matrices(const FiniteElement<dim, spacedim>  &fe,
+                                  const ArrayView<FullMatrix<number>> &matrices,
+                                  const unsigned int face_coarse,
+                                  const unsigned int face_fine,
+                                  const double       threshold = 1.e-12);
 
   /**
    * For all possible (isotropic and anisotropic) refinement cases compute the
@@ -435,9 +433,9 @@ namespace FETools
    * data <tt>u<sub>q</sub>, 0 <= q < Q:=quadrature.size()</tt> defined at the
    * quadrature points of a cell, with the points defined by the given
    * <tt>rhs_quadrature</tt> object. We may then want to ask for that finite
-   * element function (on a single cell) <tt>v<sub>h</sub></tt> in the finite-
-   * dimensional space defined by the given FE object that is the projection
-   * of <tt>u</tt> in the following sense:
+   * element function (on a single cell) <tt>v<sub>h</sub></tt> in the
+   * finite-dimensional space defined by the given FE object that is the
+   * projection of <tt>u</tt> in the following sense:
    *
    * Usually, the projection <tt>v<sub>h</sub></tt> is that function that
    * satisfies <tt>(v<sub>h</sub>,w)=(u,w)</tt> for all discrete test
@@ -492,9 +490,9 @@ namespace FETools
    * The first one is that it really only makes sense to project onto a finite
    * element that has at most as many degrees of freedom per cell as there are
    * quadrature points; the projection of N quadrature point data into a space
-   * with M>N unknowns is well-defined, but often yields funny and non-
-   * intuitive results. Secondly, one would think that if the quadrature point
-   * data is defined in the support points of the finite element, i.e. the
+   * with M>N unknowns is well-defined, but often yields funny and
+   * non-intuitive results. Secondly, one would think that if the quadrature
+   * point data is defined in the support points of the finite element, i.e. the
    * quadrature points of <tt>rhs_quadrature</tt> equal
    * <tt>fe.get_unit_support_points()</tt>, then the projection should be the
    * identity, i.e. each degree of freedom of the finite element equals the
@@ -587,7 +585,41 @@ namespace FETools
     const unsigned int                                              face,
     FullMatrix<double>                                             &X);
 
-
+  /**
+   * @brief Compute the nodal quadrature rule associated with an element.
+   *
+   * Many common finite elements (e.g., FE_Q) are interpolatory - i.e., they are
+   * multidimensional generalizations of Lagrange interpolating polynomials and
+   * are collectively referred to as @ref GlossLagrange "Lagrange elements".
+   *
+   * Since these elements define a polynomial interpolation, they implicitly
+   * also define a Quadrature rule. For example, the weights of QTrapezoid are
+   * the integrals of multilinear shape functions and the quadrature points are
+   * the vertices of the reference hypercube - i.e., QTrapezoid is the nodal
+   * rule corresponding to FE_Q(1). Some elements, such as FE_SimplexP(2), do
+   * not correspond to useful nodal quadrature rules since the integrals of some
+   * shape functions (in this case, the ones with support points at vertices)
+   * are zero. Other elements, like FE_RaviartThomas, are noninterpolatory and
+   * therefore also do not correspond to nodal quadrature rules.
+   *
+   * Given a FiniteElement with support points, this function determines the
+   * associated quadrature rule by setting the weights equal to the integrals of
+   * its shape functions (even if they are zero or negative) and points equal to
+   * the support points of the FiniteElement.
+   *
+   * @note If @p fe is an FE_Q or FE_DGQ with the default support points (i.e.,
+   * it was constructed with a polynomial order argument and not with a custom
+   * list of support points) then the corresponding nodal quadrature rule has
+   * the same points and weights as QGaussLobatto (but they will generally be in
+   * a different order).
+   *
+   * @note This function is only implemented for scalar (i.e., one block and one
+   * component) elements which have
+   * @ref GlossSupport "support points".
+   */
+  template <int dim, int spacedim = dim>
+  Quadrature<dim>
+  compute_nodal_quadrature(const FiniteElement<dim, spacedim> &fe);
 
   /**
    * Wrapper around
@@ -615,7 +647,7 @@ namespace FETools
 
   /** @} */
   /**
-   * @name Functions which should be in DoFTools
+   * @name Functions which should be in DoFTools or VectorTools
    */
   /** @{ */
   /**
@@ -646,6 +678,9 @@ namespace FETools
    * object as argument, see below, or make the field conforming yourself
    * by calling the @p distribute function of your hanging node constraints
    * object.
+   *
+   * @note There are also various interpolation-related functions in
+   *   namespace VectorTools.
    */
   template <int dim, int spacedim, class InVector, class OutVector>
   void
@@ -669,6 +704,9 @@ namespace FETools
    * a continuous finite element there is no point interpolation defined at
    * the discontinuities.  Therefore the mean value is taken at the DoF values
    * at the discontinuities.
+   *
+   * @note There are also various interpolation-related functions in
+   *   namespace VectorTools.
    */
   template <int dim, int spacedim, class InVector, class OutVector>
   void
@@ -681,7 +719,7 @@ namespace FETools
 
   /**
    * Compute the interpolation of the @p fe1-function @p u1 to a @p
-   * fe2-function, and interpolates this to a second @p fe1-function named @p
+   * fe2-function, and interpolate this to a second @p fe1-function named @p
    * u1_interpolated.
    *
    * Note, that this function does not work on continuous elements at hanging
@@ -701,7 +739,7 @@ namespace FETools
 
   /**
    * Compute the interpolation of the @p dof1-function @p u1 to a @p
-   * dof2-function, and interpolates this to a second @p dof1-function named
+   * dof2-function, and interpolate this to a second @p dof1-function named
    * @p u1_interpolated.  @p constraints1 and @p constraints2 are the hanging
    * node constraints corresponding to @p dof1 and @p dof2, respectively.
    * These objects are particular important when continuous elements on grids
@@ -910,7 +948,7 @@ namespace FETools
    * <li> Tensor product construction (<code>do_tensor_product=true</code>):
    * The tensor product construction, in the simplest case, builds a
    * vector-valued element from scalar elements (see
-   * @ref vector_valued "this documentation module"
+   * @ref vector_valued "this documentation topic"
    * and
    * @ref GlossComponent "this glossary entry"
    * for more information).
@@ -1007,9 +1045,12 @@ namespace FETools
 
     /**
      * Same as above but for a specific number of sub-elements.
+     *
+     * @deprecated Use the versions of this function that take a
+     *   vector of elements or an initializer list as arguments.
      */
     template <int dim, int spacedim>
-    FiniteElementData<dim>
+    DEAL_II_DEPRECATED FiniteElementData<dim>
     multiply_dof_numbers(const FiniteElement<dim, spacedim> *fe1,
                          const unsigned int                  N1,
                          const FiniteElement<dim, spacedim> *fe2 = nullptr,
@@ -1064,20 +1105,23 @@ namespace FETools
      * strategy outlined in the documentation of the
      * FETools::Composition namespace. Consequently, this function
      * does not have a @p do_tensor_product argument.
+     *
+     * @deprecated Use the versions of this function that take a
+     *   vector of elements or an initializer list as arguments.
      */
     template <int dim, int spacedim>
-    std::vector<bool>
-    compute_restriction_is_additive_flags(
-      const FiniteElement<dim, spacedim> *fe1,
-      const unsigned int                  N1,
-      const FiniteElement<dim, spacedim> *fe2 = nullptr,
-      const unsigned int                  N2  = 0,
-      const FiniteElement<dim, spacedim> *fe3 = nullptr,
-      const unsigned int                  N3  = 0,
-      const FiniteElement<dim, spacedim> *fe4 = nullptr,
-      const unsigned int                  N4  = 0,
-      const FiniteElement<dim, spacedim> *fe5 = nullptr,
-      const unsigned int                  N5  = 0);
+    DEAL_II_DEPRECATED std::vector<bool>
+                       compute_restriction_is_additive_flags(
+                         const FiniteElement<dim, spacedim> *fe1,
+                         const unsigned int                  N1,
+                         const FiniteElement<dim, spacedim> *fe2 = nullptr,
+                         const unsigned int                  N2  = 0,
+                         const FiniteElement<dim, spacedim> *fe3 = nullptr,
+                         const unsigned int                  N3  = 0,
+                         const FiniteElement<dim, spacedim> *fe4 = nullptr,
+                         const unsigned int                  N4  = 0,
+                         const FiniteElement<dim, spacedim> *fe5 = nullptr,
+                         const unsigned int                  N5  = 0);
 
 
     /**
@@ -1132,21 +1176,24 @@ namespace FETools
      *
      * See the documentation of namespace FETools::Compositing for more
      * information about the @p do_tensor_product argument.
+     *
+     * @deprecated Use the versions of this function that take a
+     *   vector of elements or an initializer list as arguments.
      */
     template <int dim, int spacedim>
-    std::vector<ComponentMask>
-    compute_nonzero_components(
-      const FiniteElement<dim, spacedim> *fe1,
-      const unsigned int                  N1,
-      const FiniteElement<dim, spacedim> *fe2               = nullptr,
-      const unsigned int                  N2                = 0,
-      const FiniteElement<dim, spacedim> *fe3               = nullptr,
-      const unsigned int                  N3                = 0,
-      const FiniteElement<dim, spacedim> *fe4               = nullptr,
-      const unsigned int                  N4                = 0,
-      const FiniteElement<dim, spacedim> *fe5               = nullptr,
-      const unsigned int                  N5                = 0,
-      const bool                          do_tensor_product = true);
+    DEAL_II_DEPRECATED std::vector<ComponentMask>
+                       compute_nonzero_components(
+                         const FiniteElement<dim, spacedim> *fe1,
+                         const unsigned int                  N1,
+                         const FiniteElement<dim, spacedim> *fe2 = nullptr,
+                         const unsigned int                  N2  = 0,
+                         const FiniteElement<dim, spacedim> *fe3 = nullptr,
+                         const unsigned int                  N3  = 0,
+                         const FiniteElement<dim, spacedim> *fe4 = nullptr,
+                         const unsigned int                  N4  = 0,
+                         const FiniteElement<dim, spacedim> *fe5 = nullptr,
+                         const unsigned int                  N5  = 0,
+                         const bool                          do_tensor_product = true);
 
     /**
      * For a given (composite) @p finite_element build @p
@@ -1251,8 +1298,8 @@ namespace FETools
    * The format of the @p name parameter should include the name of a finite
    * element. However, it is safe to use either the class name alone or to use
    * the result of FiniteElement::get_name (which includes the space dimension
-   * as well as the polynomial degree), since everything after the first non-
-   * name character will be ignored.
+   * as well as the polynomial degree), since everything after the first
+   * non-name character will be ignored.
    *
    * The FEFactory object should be an object newly created with <tt>new</tt>.
    * FETools will take ownership of this object and delete it once it is not

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2010 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/logstream.h>
@@ -35,6 +34,59 @@
 
 
 DEAL_II_NAMESPACE_OPEN
+
+
+namespace internal
+{
+  namespace parallel
+  {
+    namespace distributed
+    {
+      namespace TriangulationImplementation
+      {
+        /**
+         * Communicate refinement flags on ghost cells from the owner of the
+         * cell.
+         *
+         * This is necessary to get consistent refinement, as mesh smoothing
+         * would undo some of the requested coarsening/refinement.
+         */
+        template <int dim, int spacedim>
+        void
+        exchange_refinement_flags(
+          dealii::parallel::distributed::Triangulation<dim, spacedim> &tria)
+        {
+          auto pack =
+            [](const typename Triangulation<dim, spacedim>::active_cell_iterator
+                 &cell) -> std::uint8_t {
+            if (cell->refine_flag_set())
+              return 1;
+            if (cell->coarsen_flag_set())
+              return 2;
+            return 0;
+          };
+
+          auto unpack =
+            [](const typename Triangulation<dim, spacedim>::active_cell_iterator
+                                  &cell,
+               const std::uint8_t &flag) -> void {
+            cell->clear_coarsen_flag();
+            cell->clear_refine_flag();
+            if (flag == 1)
+              cell->set_refine_flag();
+            else if (flag == 2)
+              cell->set_coarsen_flag();
+          };
+
+          GridTools::exchange_cell_data_to_ghosts<std::uint8_t>(tria,
+                                                                pack,
+                                                                unpack);
+        }
+      } // namespace TriangulationImplementation
+    }   // namespace distributed
+  }     // namespace parallel
+} // namespace internal
+
 
 
 #ifdef DEAL_II_WITH_P4EST
@@ -247,7 +299,7 @@ namespace
                     }
 
                   default:
-                    Assert(false, ExcNotImplemented());
+                    DEAL_II_NOT_IMPLEMENTED();
                 }
             }
           else
@@ -261,9 +313,10 @@ namespace
                      vertex_touch_count.end(),
                      &connectivity->ctt_offset[1]);
 
-    const typename internal::p4est::types<dim>::locidx num_vtt =
-      std::accumulate(vertex_touch_count.begin(), vertex_touch_count.end(), 0u);
-    (void)num_vtt;
+    [[maybe_unused]] const typename internal::p4est::types<dim>::locidx
+      num_vtt = std::accumulate(vertex_touch_count.begin(),
+                                vertex_touch_count.end(),
+                                0u);
     Assert(connectivity->ctt_offset[triangulation.n_vertices()] == num_vtt,
            ExcInternalError());
 
@@ -419,7 +472,7 @@ namespace
                 P8EST_QUADRANT_INIT(&p4est_child[c]);
                 break;
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
 
 
@@ -487,7 +540,7 @@ namespace
                     P8EST_QUADRANT_INIT(&p4est_child[c]);
                     break;
                   default:
-                    Assert(false, ExcNotImplemented());
+                    DEAL_II_NOT_IMPLEMENTED();
                 }
 
 
@@ -565,8 +618,6 @@ namespace
       }
   }
 
-
-#  ifdef P4EST_SEARCH_LOCAL
   template <int dim>
   class PartitionSearch
   {
@@ -679,7 +730,6 @@ namespace
     void * /* this is always nullptr */ point)
   {
     // point must be nullptr here
-    (void)point;
     Assert(point == nullptr, dealii::ExcInternalError());
 
     // we need the user pointer
@@ -1142,7 +1192,7 @@ namespace
 
     are_vertices_initialized = true;
   }
-#  endif //  P4EST_SEARCH_LOCAL defined
+
 
 
   /**
@@ -1312,7 +1362,7 @@ namespace
                 P8EST_QUADRANT_INIT(&p4est_child[c]);
                 break;
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
         internal::p4est::functions<dim>::quadrant_childrenv(&p4est_cell,
                                                             p4est_child);
@@ -1602,7 +1652,7 @@ namespace
                 P8EST_QUADRANT_INIT(&p4est_child[c]);
                 break;
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
 
         dealii::internal::p4est::functions<dim>::quadrant_childrenv(
@@ -1643,7 +1693,7 @@ namespace
                 P8EST_QUADRANT_INIT(&p4est_child[c]);
                 break;
               default:
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
             }
 
         dealii::internal::p4est::functions<dim>::quadrant_childrenv(
@@ -1725,12 +1775,13 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
     Triangulation<dim, spacedim>::~Triangulation()
     {
-      // virtual functions called in constructors and destructors never use the
-      // override in a derived class
-      // for clarity be explicit on which function is called
       try
         {
-          Triangulation<dim, spacedim>::clear();
+          // Calling virtual functions in constructors and destructors
+          // is not entirely intuitive and may not result in what one
+          // expects. For clarity be explicit on which function is
+          // called:
+          parallel::distributed::Triangulation<dim, spacedim>::clear();
         }
       catch (...)
         {}
@@ -1760,7 +1811,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       Assert(
@@ -1786,7 +1837,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       this->update_periodic_face_map();
@@ -1799,11 +1850,9 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
     void Triangulation<dim, spacedim>::create_triangulation(
       const TriangulationDescription::Description<dim, spacedim>
-        &construction_data)
+        & /*construction_data*/)
     {
-      (void)construction_data;
-
-      Assert(false, ExcInternalError());
+      DEAL_II_ASSERT_UNREACHABLE();
     }
 
 
@@ -1927,19 +1976,6 @@ namespace parallel
                             this->data_serializer.dest_sizes_variable.end(),
                             std::vector<int>::size_type(0)));
 
-#  if DEAL_II_P4EST_VERSION_GTE(2, 0, 65, 0)
-#  else
-          // ----- WORKAROUND -----
-          // An assertion in p4est prevents us from sending/receiving no data
-          // at all, which is mandatory if one of our processes does not own
-          // any quadrant. This bypasses the assertion from being triggered.
-          //   - see: https://github.com/cburstedde/p4est/issues/48
-          if (this->data_serializer.src_sizes_variable.empty())
-            this->data_serializer.src_sizes_variable.resize(1);
-          if (this->data_serializer.dest_sizes_variable.empty())
-            this->data_serializer.dest_sizes_variable.resize(1);
-#  endif
-
           // Execute variable size transfer.
           dealii::internal::p4est::functions<dim>::transfer_custom(
             parallel_forest->global_first_quadrant,
@@ -2000,7 +2036,8 @@ namespace parallel
 
     template <int dim, int spacedim>
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
-    void Triangulation<dim, spacedim>::save(const std::string &filename) const
+    void Triangulation<dim, spacedim>::save(
+      const std::string &file_basename) const
     {
       Assert(
         this->cell_attached_data.n_attached_deserialize == 0,
@@ -2017,7 +2054,7 @@ namespace parallel
 
       if (this->my_subdomain == 0)
         {
-          std::string   fname = std::string(filename) + ".info";
+          std::string   fname = file_basename + ".info";
           std::ofstream f(fname);
           f << "version nproc n_attached_fixed_size_objs n_attached_variable_size_objs n_coarse_cells"
             << std::endl
@@ -2029,9 +2066,8 @@ namespace parallel
         }
 
       // each cell should have been flagged `CellStatus::cell_will_persist`
-      for (const auto &cell_rel : this->local_cell_relations)
+      for ([[maybe_unused]] const auto &cell_rel : this->local_cell_relations)
         {
-          (void)cell_rel;
           Assert((cell_rel.second == // cell_status
                   CellStatus::cell_will_persist),
                  ExcInternalError());
@@ -2040,9 +2076,9 @@ namespace parallel
       // Save cell attached data.
       this->save_attached_data(parallel_forest->global_first_quadrant[myrank],
                                parallel_forest->global_num_quadrants,
-                               filename);
+                               file_basename);
 
-      dealii::internal::p4est::functions<dim>::save(filename.c_str(),
+      dealii::internal::p4est::functions<dim>::save(file_basename.c_str(),
                                                     parallel_forest,
                                                     false);
 
@@ -2054,7 +2090,7 @@ namespace parallel
 
     template <int dim, int spacedim>
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
-    void Triangulation<dim, spacedim>::load(const std::string &filename)
+    void Triangulation<dim, spacedim>::load(const std::string &file_basename)
     {
       Assert(
         this->n_cells() > 0,
@@ -2086,7 +2122,7 @@ namespace parallel
       unsigned int version, numcpus, attached_count_fixed,
         attached_count_variable, n_coarse_cells;
       {
-        std::string   fname = std::string(filename) + ".info";
+        std::string   fname = std::string(file_basename) + ".info";
         std::ifstream f(fname);
         AssertThrow(f.fail() == false, ExcIO());
         std::string firstline;
@@ -2107,7 +2143,7 @@ namespace parallel
         attached_count_fixed + attached_count_variable;
 
       parallel_forest = dealii::internal::p4est::functions<dim>::load_ext(
-        filename.c_str(),
+        file_basename.c_str(),
         this->mpi_communicator,
         0,
         0,
@@ -2132,14 +2168,14 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       // Load attached cell data, if any was stored.
       this->load_attached_data(parallel_forest->global_first_quadrant[myrank],
                                parallel_forest->global_num_quadrants,
                                parallel_forest->local_num_quadrants,
-                               filename,
+                               file_basename,
                                attached_count_fixed,
                                attached_count_variable);
 
@@ -2148,17 +2184,6 @@ namespace parallel
 
       this->update_periodic_face_map();
       this->update_number_cache();
-    }
-
-
-
-    template <int dim, int spacedim>
-    DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
-    void Triangulation<dim, spacedim>::load(const std::string &filename,
-                                            const bool         autopartition)
-    {
-      (void)autopartition;
-      load(filename);
     }
 
 
@@ -2207,7 +2232,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       this->update_periodic_face_map();
@@ -2223,7 +2248,22 @@ namespace parallel
       Assert(parallel_forest != nullptr,
              ExcMessage(
                "Can't produce a check sum when no forest is created yet."));
-      return dealii::internal::p4est::functions<dim>::checksum(parallel_forest);
+
+      auto checksum =
+        dealii::internal::p4est::functions<dim>::checksum(parallel_forest);
+
+#  if !DEAL_II_P4EST_VERSION_GTE(2, 8, 6, 0)
+      /*
+       * p4est prior to 2.8.6 returns the proper checksum only on rank 0
+       * and simply "0" on all other ranks. This is not really what we
+       * want, thus broadcast the correct value to all other ranks:
+       */
+      checksum = Utilities::MPI::broadcast(this->mpi_communicator,
+                                           checksum,
+                                           /*root_process*/ 0);
+#  endif
+
+      return checksum;
     }
 
 
@@ -2556,42 +2596,33 @@ namespace parallel
         // {0,0,0,0,0,0,0,0}.
         using cell_iterator =
           typename Triangulation<dim, spacedim>::cell_iterator;
-        typename std::map<std::pair<cell_iterator, unsigned int>,
-                          std::pair<std::pair<cell_iterator, unsigned int>,
-                                    std::bitset<3>>>::const_iterator it;
-        for (it = tria.get_periodic_face_map().begin();
-             it != tria.get_periodic_face_map().end();
-             ++it)
+        for (const auto &it : tria.get_periodic_face_map())
           {
-            const cell_iterator &cell_1           = it->first.first;
-            const unsigned int   face_no_1        = it->first.second;
-            const cell_iterator &cell_2           = it->second.first.first;
-            const unsigned int   face_no_2        = it->second.first.second;
-            const std::bitset<3> face_orientation = it->second.second;
+            const cell_iterator &cell_1               = it.first.first;
+            const unsigned int   face_no_1            = it.first.second;
+            const cell_iterator &cell_2               = it.second.first.first;
+            const unsigned int   face_no_2            = it.second.first.second;
+            const auto           combined_orientation = it.second.second;
 
             if (cell_1->level() == cell_2->level())
               {
-                for (unsigned int v = 0;
-                     v < GeometryInfo<dim - 1>::vertices_per_cell;
-                     ++v)
+                for (const unsigned int v :
+                     cell_1->face(face_no_1)->vertex_indices())
                   {
                     // take possible non-standard orientation of face on
                     // cell[0] into account
-                    const unsigned int vface0 =
-                      GeometryInfo<dim>::standard_to_real_face_vertex(
-                        v,
-                        face_orientation[0],
-                        face_orientation[1],
-                        face_orientation[2]);
-                    const unsigned int vi0 =
-                      topological_vertex_numbering[cell_1->face(face_no_1)
-                                                     ->vertex_index(vface0)];
+                    const unsigned int vface1 =
+                      cell_1->reference_cell().standard_to_real_face_vertex(
+                        v, face_no_1, combined_orientation);
                     const unsigned int vi1 =
+                      topological_vertex_numbering[cell_1->face(face_no_1)
+                                                     ->vertex_index(vface1)];
+                    const unsigned int vi2 =
                       topological_vertex_numbering[cell_2->face(face_no_2)
                                                      ->vertex_index(v)];
-                    const unsigned int min_index = std::min(vi0, vi1);
+                    const unsigned int min_index = std::min(vi1, vi2);
                     topological_vertex_numbering[cell_1->face(face_no_1)
-                                                   ->vertex_index(vface0)] =
+                                                   ->vertex_index(vface1)] =
                       topological_vertex_numbering[cell_2->face(face_no_2)
                                                      ->vertex_index(v)] =
                         min_index;
@@ -2599,13 +2630,18 @@ namespace parallel
               }
           }
 
+#  ifdef DEBUG
         // There must not be any chains!
         for (unsigned int i = 0; i < topological_vertex_numbering.size(); ++i)
           {
             const unsigned int j = topological_vertex_numbering[i];
-            if (j != i)
-              Assert(topological_vertex_numbering[j] == j, ExcInternalError());
+            Assert(j == i || topological_vertex_numbering[j] == j,
+                   ExcMessage("Got inconclusive constraints with chain: " +
+                              std::to_string(i) + " vs " + std::to_string(j) +
+                              " which should be equal to " +
+                              std::to_string(topological_vertex_numbering[j])));
           }
+#  endif
 
 
         // this code is replicated from grid/tria.cc but using an indirection
@@ -2742,34 +2778,17 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
     bool Triangulation<dim, spacedim>::prepare_coarsening_and_refinement()
     {
-      bool         mesh_changed = false;
-      unsigned int loop_counter = 0;
-      unsigned int n_changes    = 0;
-      do
-        {
-          n_changes += this->dealii::Triangulation<dim, spacedim>::
-                         prepare_coarsening_and_refinement();
-          this->update_periodic_face_map();
-          // enforce 2:1 mesh balance over periodic boundaries
-          mesh_changed = enforce_mesh_balance_over_periodic_boundaries(*this);
-          n_changes += mesh_changed;
+      // First exchange coarsen/refinement flags on ghost cells. After this
+      // collective communication call all flags on ghost cells match the
+      // flags set by the user on the owning rank.
+      dealii::internal::parallel::distributed::TriangulationImplementation::
+        exchange_refinement_flags(*this);
 
-          // We can't be sure that we won't run into a situation where we can
-          // not reconcile mesh smoothing and balancing of periodic faces. As
-          // we don't know what else to do, at least abort with an error
-          // message.
-          ++loop_counter;
-          AssertThrow(
-            loop_counter < 32,
-            ExcMessage(
-              "Infinite loop in "
-              "parallel::distributed::Triangulation::prepare_coarsening_and_refinement() "
-              "for periodic boundaries detected. Aborting."));
-        }
-      while (mesh_changed);
-
-      // report if we observed changes in any of the sub-functions
-      return n_changes > 0;
+      // Now we can call the sequential version to apply mesh smoothing and
+      // other modifications:
+      const bool any_changes = this->dealii::Triangulation<dim, spacedim>::
+                                 prepare_coarsening_and_refinement();
+      return any_changes;
     }
 
 
@@ -2833,7 +2852,7 @@ namespace parallel
               {
                 // the underlying triangulation should not be checking for
                 // distorted cells
-                Assert(false, ExcInternalError());
+                DEAL_II_ASSERT_UNREACHABLE();
               }
           }
 
@@ -2929,8 +2948,43 @@ namespace parallel
                                             ghost_owner);
             }
 
-          // fix all the flags to make sure we have a consistent mesh
-          this->prepare_coarsening_and_refinement();
+          // Fix all the flags to make sure we have a consistent local
+          // mesh. For some reason periodic boundaries involving artificial
+          // cells are not obeying the 2:1 ratio that we require (and that is
+          // enforced by p4est between active cells). So, here we will loop
+          // refining across periodic boundaries until 2:1 is satisfied. Note
+          // that we are using the base class (sequential) prepare and execute
+          // calls here, not involving communication, because we are only
+          // trying to recreate a local triangulation from the p4est data.
+          {
+            bool         mesh_changed = true;
+            unsigned int loop_counter = 0;
+
+            do
+              {
+                this->dealii::Triangulation<dim, spacedim>::
+                  prepare_coarsening_and_refinement();
+
+                this->update_periodic_face_map();
+
+                mesh_changed =
+                  enforce_mesh_balance_over_periodic_boundaries(*this);
+
+                // We can't be sure that we won't run into a situation where we
+                // can not reconcile mesh smoothing and balancing of periodic
+                // faces. As we don't know what else to do, at least abort with
+                // an error message.
+                ++loop_counter;
+
+                AssertThrow(
+                  loop_counter < 32,
+                  ExcMessage(
+                    "Infinite loop in "
+                    "parallel::distributed::Triangulation::copy_local_forest_to_triangulation() "
+                    "for periodic boundaries detected. Aborting."));
+              }
+            while (mesh_changed);
+          }
 
           // see if any flags are still set
           mesh_changed =
@@ -2953,7 +3007,7 @@ namespace parallel
             {
               // the underlying triangulation should not be checking for
               // distorted cells
-              Assert(false, ExcInternalError());
+              DEAL_II_ASSERT_UNREACHABLE();
             }
         }
       while (mesh_changed);
@@ -3067,6 +3121,7 @@ namespace parallel
 
 
 
+#  ifdef DEBUG
       // check that our local copy has exactly as many cells as the p4est
       // original (at least if we are on only one processor); for parallel
       // computations, we want to check that we have at least as many as p4est
@@ -3074,7 +3129,7 @@ namespace parallel
       // many non-artificial cells as parallel_forest->local_num_quadrants)
       {
         const unsigned int total_local_cells = this->n_active_cells();
-        (void)total_local_cells;
+
 
         if (Utilities::MPI::n_mpi_processes(this->mpi_communicator) == 1)
           {
@@ -3089,7 +3144,6 @@ namespace parallel
                    ExcInternalError());
           }
 
-#  ifdef DEBUG
         // count the number of owned, active cells and compare with p4est.
         unsigned int n_owned = 0;
         for (const auto &cell : this->active_cell_iterators())
@@ -3101,8 +3155,8 @@ namespace parallel
         Assert(static_cast<unsigned int>(
                  parallel_forest->local_num_quadrants) == n_owned,
                ExcInternalError());
-#  endif
       }
+#  endif
 
       this->smooth_grid = save_smooth;
 
@@ -3134,16 +3188,6 @@ namespace parallel
     std::vector<types::subdomain_id> Triangulation<dim, spacedim>::
       find_point_owner_rank(const std::vector<Point<dim>> &points)
     {
-#  ifndef P4EST_SEARCH_LOCAL
-      (void)points;
-      AssertThrow(
-        false,
-        ExcMessage(
-          "This function is only available if p4est is version 2.2 and higher."));
-      // Just return to satisfy compiler
-      return std::vector<unsigned int>(1,
-                                       dealii::numbers::invalid_subdomain_id);
-#  else
       // We can only use this function if vertices are communicated to p4est
       AssertThrow(this->are_vertices_communicated_to_p4est(),
                   ExcMessage(
@@ -3214,7 +3258,13 @@ namespace parallel
           // get a non-const view of the array
           double *this_sc_point =
             static_cast<double *>(sc_array_index_ssize_t(point_sc_array, i));
-          owner_rank[i] = static_cast<types::subdomain_id>(this_sc_point[dim]);
+          Assert(this_sc_point[dim] >= 0. || this_sc_point[dim] == -1.,
+                 ExcInternalError());
+          if (this_sc_point[dim] < 0.)
+            owner_rank[i] = numbers::invalid_subdomain_id;
+          else
+            owner_rank[i] =
+              static_cast<types::subdomain_id>(this_sc_point[dim]);
         }
 
       // reset the internal pointer to this triangulation
@@ -3224,7 +3274,6 @@ namespace parallel
       sc_array_destroy_null(&point_sc_array);
 
       return owner_rank;
-#  endif // P4EST_SEARCH_LOCAL defined
     }
 
 
@@ -3398,7 +3447,7 @@ namespace parallel
             this->local_cell_relations,
             this->cell_attached_data.pack_callbacks_fixed,
             this->cell_attached_data.pack_callbacks_variable,
-            this->get_communicator());
+            this->get_mpi_communicator());
         }
 
       // finally copy back from local part of tree to deal.II
@@ -3418,7 +3467,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       // transfer data after triangulation got updated
@@ -3572,7 +3621,7 @@ namespace parallel
             this->local_cell_relations,
             this->cell_attached_data.pack_callbacks_fixed,
             this->cell_attached_data.pack_callbacks_variable,
-            this->get_communicator());
+            this->get_mpi_communicator());
         }
 
       try
@@ -3583,7 +3632,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       // transfer data after triangulation got updated
@@ -3657,11 +3706,13 @@ namespace parallel
       for (unsigned int repetition = 0; repetition < dim; ++repetition)
         for (const auto &it : this->get_periodic_face_map())
           {
-            const cell_iterator  &cell_1           = it.first.first;
-            const unsigned int    face_no_1        = it.first.second;
-            const cell_iterator  &cell_2           = it.second.first.first;
-            const unsigned int    face_no_2        = it.second.first.second;
-            const std::bitset<3> &face_orientation = it.second.second;
+            const cell_iterator &cell_1               = it.first.first;
+            const unsigned int   face_no_1            = it.first.second;
+            const cell_iterator &cell_2               = it.second.first.first;
+            const unsigned int   face_no_2            = it.second.first.second;
+            const auto           combined_orientation = it.second.second;
+            const auto [orientation, rotation, flip] =
+              ::dealii::internal::split_face_orientation(combined_orientation);
 
             if (cell_1->level() == level && cell_2->level() == level)
               {
@@ -3673,10 +3724,7 @@ namespace parallel
                     // account
                     const unsigned int vface0 =
                       GeometryInfo<dim>::standard_to_real_face_vertex(
-                        v,
-                        face_orientation[0],
-                        face_orientation[1],
-                        face_orientation[2]);
+                        v, orientation, flip, rotation);
                     if (marked_vertices[cell_1->face(face_no_1)->vertex_index(
                           vface0)] ||
                         marked_vertices[cell_2->face(face_no_2)->vertex_index(
@@ -3732,6 +3780,8 @@ namespace parallel
       // the level subdomain ids correct in the multigrid case
       dealii::Triangulation<dim, spacedim>::add_periodicity(periodicity_vector);
 
+      const auto reference_cell      = ReferenceCells::get_hypercube<dim>();
+      const auto face_reference_cell = ReferenceCells::get_hypercube<dim - 1>();
       for (const auto &face_pair : periodicity_vector)
         {
           const cell_iterator first_cell  = face_pair.cell[0];
@@ -3745,30 +3795,40 @@ namespace parallel
           const unsigned int tree_right =
             coarse_cell_to_p4est_tree_permutation[second_cell->index()];
 
-          // p4est wants to know which corner the first corner on
-          // the face with the lower id is mapped to on the face with
-          // with the higher id. For d==2 there are only two possibilities
-          // that are determined by it->orientation[1].
-          // For d==3 we have to use GridTools::OrientationLookupTable.
-          // The result is given below.
+          // p4est wants to know which corner the first corner on the face with
+          // the lower id is mapped to on the face with with the higher id. For
+          // d==2 there are only two possibilities: i.e., face_pair.orientation
+          // must be 0 or 1. For d==3 we have to use a lookup table. The result
+          // is given below.
 
           unsigned int p4est_orientation = 0;
           if (dim == 2)
-            p4est_orientation = face_pair.orientation[1];
+            {
+              AssertIndexRange(face_pair.orientation, 2);
+              p4est_orientation = face_pair.orientation ==
+                                      numbers::default_geometric_orientation ?
+                                    0u :
+                                    1u;
+            }
           else
             {
               const unsigned int  face_idx_list[] = {face_left, face_right};
               const cell_iterator cell_list[]     = {first_cell, second_cell};
               unsigned int        lower_idx, higher_idx;
+              types::geometric_orientation orientation;
               if (face_left <= face_right)
                 {
                   higher_idx = 1;
                   lower_idx  = 0;
+                  orientation =
+                    face_reference_cell.get_inverse_combined_orientation(
+                      face_pair.orientation);
                 }
               else
                 {
-                  higher_idx = 0;
-                  lower_idx  = 1;
+                  higher_idx  = 0;
+                  lower_idx   = 1;
+                  orientation = face_pair.orientation;
                 }
 
               // get the cell index of the first index on the face with the
@@ -3797,36 +3857,18 @@ namespace parallel
                 }
               Assert(first_dealii_idx_on_face != numbers::invalid_unsigned_int,
                      ExcInternalError());
-              // Now map dealii_idx_on_face according to the orientation
-              constexpr unsigned int left_to_right[8][4] = {{0, 2, 1, 3},
-                                                            {0, 1, 2, 3},
-                                                            {3, 1, 2, 0},
-                                                            {3, 2, 1, 0},
-                                                            {2, 3, 0, 1},
-                                                            {1, 3, 0, 2},
-                                                            {1, 0, 3, 2},
-                                                            {2, 0, 3, 1}};
-              constexpr unsigned int right_to_left[8][4] = {{0, 2, 1, 3},
-                                                            {0, 1, 2, 3},
-                                                            {3, 1, 2, 0},
-                                                            {3, 2, 1, 0},
-                                                            {2, 3, 0, 1},
-                                                            {2, 0, 3, 1},
-                                                            {1, 0, 3, 2},
-                                                            {1, 3, 0, 2}};
-              const unsigned int     second_dealii_idx_on_face =
-                lower_idx == 0 ? left_to_right[face_pair.orientation.to_ulong()]
-                                              [first_dealii_idx_on_face] :
-                                     right_to_left[face_pair.orientation.to_ulong()]
-                                              [first_dealii_idx_on_face];
+
+              // Now map dealii_idx_on_face according to the orientation.
+              const unsigned int second_dealii_idx_on_face =
+                reference_cell.standard_to_real_face_vertex(
+                  first_dealii_idx_on_face,
+                  face_idx_list[lower_idx],
+                  orientation);
               const unsigned int second_dealii_idx_on_cell =
-                GeometryInfo<dim>::face_to_cell_vertices(
+                reference_cell.face_to_cell_vertices(
                   face_idx_list[higher_idx],
                   second_dealii_idx_on_face,
-                  cell_list[higher_idx]->face_orientation(
-                    face_idx_list[higher_idx]),
-                  cell_list[higher_idx]->face_flip(face_idx_list[higher_idx]),
-                  cell_list[higher_idx]->face_rotation(
+                  cell_list[higher_idx]->combined_face_orientation(
                     face_idx_list[higher_idx]));
               // map back to p4est
               const unsigned int second_p4est_idx_on_face =
@@ -3869,7 +3911,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       // The range of ghost_owners might have changed so update that
@@ -3944,7 +3986,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       if (const dealii::parallel::distributed::Triangulation<dim, spacedim>
@@ -3994,7 +4036,7 @@ namespace parallel
         {
           // the underlying triangulation should not be checking for distorted
           // cells
-          Assert(false, ExcInternalError());
+          DEAL_II_ASSERT_UNREACHABLE();
         }
 
       this->update_periodic_face_map();
@@ -4083,7 +4125,7 @@ namespace parallel
           smooth_grid,
           false)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
 
@@ -4115,7 +4157,7 @@ namespace parallel
       compute_level_vertices_with_ghost_neighbors(
         const unsigned int /*level*/) const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
 
       return std::map<unsigned int, std::set<dealii::types::subdomain_id>>();
     }
@@ -4127,7 +4169,7 @@ namespace parallel
     std::vector<bool> Triangulation<1, spacedim>::
       mark_locally_active_vertices_on_level(const unsigned int) const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<bool>();
     }
 
@@ -4138,7 +4180,7 @@ namespace parallel
     unsigned int Triangulation<1, spacedim>::
       coarse_cell_id_to_coarse_cell_index(const types::coarse_cell_id) const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return 0;
     }
 
@@ -4150,7 +4192,7 @@ namespace parallel
       Triangulation<1, spacedim>::coarse_cell_index_to_coarse_cell_id(
         const unsigned int) const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return 0;
     }
 
@@ -4160,16 +4202,7 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
     void Triangulation<1, spacedim>::load(const std::string &)
     {
-      Assert(false, ExcNotImplemented());
-    }
-
-
-
-    template <int spacedim>
-    DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
-    void Triangulation<1, spacedim>::load(const std::string &, const bool)
-    {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
 
@@ -4178,7 +4211,7 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
     void Triangulation<1, spacedim>::save(const std::string &) const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
 
@@ -4187,7 +4220,7 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
     bool Triangulation<1, spacedim>::is_multilevel_hierarchy_constructed() const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return false;
     }
 
@@ -4197,7 +4230,7 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
     bool Triangulation<1, spacedim>::are_vertices_communicated_to_p4est() const
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return false;
     }
 
@@ -4207,7 +4240,7 @@ namespace parallel
     DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<1, spacedim>))
     void Triangulation<1, spacedim>::update_cell_relations()
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
   } // namespace distributed
@@ -4271,7 +4304,7 @@ namespace parallel
                     break;
 
                   default:
-                    Assert(false, ExcInternalError());
+                    DEAL_II_ASSERT_UNREACHABLE();
                     break;
                 }
             }

@@ -1,20 +1,19 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
+## SPDX-License-Identifier: LGPL-2.1-or-later
 ## Copyright (C) 2012 - 2023 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
-# This file sets up the project configuration consisting of
+# This file sets up the project installation and configuration consisting of
 #
 #   deal.IIConfig.cmake
 #   deal.IIVersionConfig.cmake
@@ -23,6 +22,38 @@
 # from the build directory or after installation. So we have to prepare
 # two distinct setups.
 #
+
+
+message(STATUS "Setting up library installation")
+
+set(_targets ${DEAL_II_TARGET_NAME})
+foreach(build ${DEAL_II_BUILD_TYPES})
+  string(TOLOWER ${build} build_lowercase)
+  list(APPEND _targets ${DEAL_II_TARGET_NAME}_${build_lowercase})
+endforeach()
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${DEAL_II_PROJECT_CONFIG_RELDIR})
+export(TARGETS ${_targets} ${DEAL_II_TARGETS} ${DEAL_II_TARGETS_DEBUG} ${DEAL_II_TARGETS_RELEASE}
+  NAMESPACE "${DEAL_II_TARGET_NAME}::"
+  FILE ${CMAKE_BINARY_DIR}/${DEAL_II_PROJECT_CONFIG_RELDIR}/${DEAL_II_PROJECT_CONFIG_NAME}Targets.cmake
+)
+
+install(TARGETS ${_targets} ${DEAL_II_TARGETS} ${DEAL_II_TARGETS_DEBUG} ${DEAL_II_TARGETS_RELEASE}
+  COMPONENT library
+  EXPORT ${DEAL_II_PROJECT_CONFIG_NAME}Targets
+  RUNTIME DESTINATION ${DEAL_II_EXECUTABLE_RELDIR}
+  LIBRARY DESTINATION ${DEAL_II_LIBRARY_RELDIR}
+  ARCHIVE DESTINATION ${DEAL_II_LIBRARY_RELDIR}
+  )
+
+install(EXPORT ${DEAL_II_PROJECT_CONFIG_NAME}Targets
+  NAMESPACE "${DEAL_II_TARGET_NAME}::"
+  DESTINATION ${DEAL_II_PROJECT_CONFIG_RELDIR}
+  COMPONENT library
+  )
+
+message(STATUS "Setting up library installation - Done")
+
 
 message(STATUS "Setting up project configuration")
 
@@ -193,4 +224,3 @@ install(FILES
 #
 
 message(STATUS "Setting up project configuration - Done")
-

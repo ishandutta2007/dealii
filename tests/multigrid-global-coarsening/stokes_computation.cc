@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2018 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 // test for correctness of matrix free implementation for multigrid stokes
@@ -88,7 +87,7 @@ namespace StokesClass
               class MassMatrixType,
               class PreconditionerA,
               class PreconditionerMp>
-    class BlockSchurPreconditioner : public Subscriptor
+    class BlockSchurPreconditioner : public EnableObserverPointer
     {
     public:
       /**
@@ -271,7 +270,7 @@ namespace StokesClass
       // iterations of our two-stage outer GMRES iteration)
       if (do_solve_A == true)
         {
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
         }
       else
         {
@@ -494,7 +493,7 @@ namespace StokesClass
                 Point<dim> p;
                 for (unsigned int d = 0; d < dim; ++d)
                   {
-                    p(d) = velocity.quadrature_point(q)(d)[i];
+                    p[d] = velocity.quadrature_point(q)[d][i];
                   }
                 return_value[i] = 2.0 * viscosity_function.value(p);
               }
@@ -559,7 +558,7 @@ namespace StokesClass
   void
   StokesOperator<dim, degree_v, number>::compute_diagonal()
   {
-    Assert(false, ExcNotImplemented());
+    DEAL_II_NOT_IMPLEMENTED();
   }
 
 
@@ -628,7 +627,7 @@ namespace StokesClass
               {
                 Point<dim> p;
                 for (unsigned int d = 0; d < dim; ++d)
-                  p(d) = pressure.quadrature_point(q)(d)[i];
+                  p[d] = pressure.quadrature_point(q)[d][i];
                 return_value[i] = 1.0 / viscosity_function.value(p);
               }
             one_over_viscosity(cell, q) = return_value;
@@ -807,7 +806,7 @@ namespace StokesClass
                 Point<dim> p;
                 for (unsigned int d = 0; d < dim; ++d)
                   {
-                    p(d) = velocity.quadrature_point(q)(d)[i];
+                    p[d] = velocity.quadrature_point(q)[d][i];
                   }
                 return_value[i] = 2.0 * viscosity_function.value(p);
               }
@@ -1149,10 +1148,7 @@ namespace StokesClass
     stokes_matrix.initialize_dof_vector(solution);
     stokes_matrix.initialize_dof_vector(system_rhs);
 
-    solution.update_ghost_values();
     solution.collect_sizes();
-
-    system_rhs.update_ghost_values();
     system_rhs.collect_sizes();
   }
 
@@ -1227,7 +1223,7 @@ namespace StokesClass
               {
                 Point<dim> p;
                 for (unsigned int d = 0; d < dim; ++d)
-                  p(d) = velocity.quadrature_point(q)(d)[i];
+                  p[d] = velocity.quadrature_point(q)[d][i];
 
                 Vector<double> rhs_temp(dim + 1);
                 right_hand_side.vector_value(p, rhs_temp);

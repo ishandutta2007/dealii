@@ -1,26 +1,25 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2002 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_sparse_matrix_h
 #define dealii_sparse_matrix_h
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/mpi_stub.h>
-#include <deal.II/base/smartpointer.h>
-#include <deal.II/base/subscriptor.h>
+#include <deal.II/base/observer_pointer.h>
 
 #include <deal.II/lac/exceptions.h>
 #include <deal.II/lac/identity_matrix.h>
@@ -517,7 +516,7 @@ DEAL_II_NAMESPACE_OPEN
  * @ingroup Matrix1
  */
 template <typename number>
-class SparseMatrix : public virtual Subscriptor
+class SparseMatrix : public virtual EnableObserverPointer
 {
 public:
   /**
@@ -1322,8 +1321,8 @@ public:
    * Return the $l_1$-norm of the matrix, that is $|M|_1=\max_{\mathrm{all\
    * columns\ }j}\sum_{\mathrm{all\ rows\ } i} |M_{ij}|$, (max. sum of
    * columns).  This is the natural matrix norm that is compatible to the
-   * $l_1$-norm for vectors, i.e.  $|Mv|_1\leq |M|_1 |v|_1$. (cf. Haemmerlin-
-   * Hoffmann: Numerische Mathematik)
+   * $l_1$-norm for vectors, i.e.  $|Mv|_1\leq |M|_1 |v|_1$. (cf.
+   * Haemmerlin-Hoffmann: Numerische Mathematik)
    */
   real_type
   l1_norm() const;
@@ -1743,9 +1742,9 @@ private:
   /**
    * Pointer to the sparsity pattern used for this matrix. In order to
    * guarantee that it is not deleted while still in use, we subscribe to it
-   * using the SmartPointer class.
+   * using the ObserverPointer class.
    */
-  SmartPointer<const SparsityPattern, SparseMatrix<number>> cols;
+  ObserverPointer<const SparsityPattern, SparseMatrix<number>> cols;
 
   /**
    * Array of values for all the nonzero entries. The position of an

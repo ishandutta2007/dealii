@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2020 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/polynomial.h>
 #include <deal.II/base/polynomials_barycentric.h>
@@ -109,7 +108,7 @@ ReferenceCell::to_string() const
       case ReferenceCells::Invalid:
         return "Invalid";
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return "Invalid";
@@ -136,7 +135,7 @@ ReferenceCell::get_default_mapping(const unsigned int degree) const
       FE_WedgeP<dim, spacedim>(degree));
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
   return std::make_unique<MappingQ<dim, spacedim>>(degree);
@@ -174,7 +173,7 @@ ReferenceCell::get_default_linear_mapping() const
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
   return StaticMappingQ1<dim, spacedim>::mapping; // never reached
@@ -197,7 +196,7 @@ ReferenceCell::get_gauss_type_quadrature(const unsigned n_points_1d) const
   else if (*this == ReferenceCells::Wedge)
     return QGaussWedge<dim>(n_points_1d);
   else
-    Assert(false, ExcNotImplemented());
+    DEAL_II_NOT_IMPLEMENTED();
 
   return Quadrature<dim>(); // never reached
 }
@@ -242,7 +241,7 @@ ReferenceCell::get_nodal_type_quadrature() const
       return quadrature;
     }
   else
-    Assert(false, ExcNotImplemented());
+    DEAL_II_NOT_IMPLEMENTED();
 
   static const Quadrature<dim> dummy;
   return dummy; // never reached
@@ -285,7 +284,7 @@ ReferenceCell::exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const
           return exodus_to_deal[vertex_n];
         }
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return numbers::invalid_unsigned_int;
@@ -332,7 +331,7 @@ ReferenceCell::exodusii_face_to_deal_face(const unsigned int face_n) const
           return exodus_to_deal[face_n];
         }
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return numbers::invalid_unsigned_int;
@@ -369,7 +368,7 @@ ReferenceCell::unv_vertex_to_deal_vertex(const unsigned int vertex_n) const
       return unv_to_deal[vertex_n];
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 
   return numbers::invalid_unsigned_int;
 }
@@ -400,7 +399,7 @@ ReferenceCell::vtk_linear_type() const
       case ReferenceCells::Invalid:
         return VTKCellType::VTK_INVALID;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return VTKCellType::VTK_INVALID;
@@ -432,7 +431,7 @@ ReferenceCell::vtk_quadratic_type() const
       case ReferenceCells::Invalid:
         return VTKCellType::VTK_INVALID;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return VTKCellType::VTK_INVALID;
@@ -464,7 +463,7 @@ ReferenceCell::vtk_lagrange_type() const
       case ReferenceCells::Invalid:
         return VTKCellType::VTK_INVALID;
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return VTKCellType::VTK_INVALID;
@@ -479,7 +478,7 @@ ReferenceCell::vtk_lexicographic_to_node_index<0>(
   const std::array<unsigned, 0> &,
   const bool) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return 0;
 }
 
@@ -492,7 +491,7 @@ ReferenceCell::vtk_lexicographic_to_node_index<1>(
   const std::array<unsigned, 1> &,
   const bool) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return 0;
 }
 
@@ -712,11 +711,11 @@ ReferenceCell::vtk_vertex_to_deal_vertex(const unsigned int vertex_index) const
         }
       case ReferenceCells::Invalid:
         {
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
           return numbers::invalid_unsigned_int;
         }
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return numbers::invalid_unsigned_int;
@@ -800,7 +799,7 @@ ReferenceCell::gmsh_element_type() const
         return 5;
       case ReferenceCells::Invalid:
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   return numbers::invalid_unsigned_int;
@@ -845,7 +844,7 @@ namespace
                   const Point<dim> & /*p*/,
                   const ReferenceCell /*reference_cell*/)
   {
-    Assert(false, ExcInternalError());
+    DEAL_II_ASSERT_UNREACHABLE();
     return std::make_pair(Point<dim>(),
                           std::numeric_limits<double>::signaling_NaN());
   }
@@ -1018,7 +1017,7 @@ ReferenceCell::closest_point(const Point<dim> &p) const
           std::array<Point<dim>, 3> vertices;
           for (unsigned int vertex_no = 0; vertex_no < 3; ++vertex_no)
             vertices[vertex_no] = vertex<dim>(face_to_cell_vertices(
-              face_no, vertex_no, default_combined_face_orientation()));
+              face_no, vertex_no, numbers::default_geometric_orientation));
 
           auto pair = project_to_quad(vertices, p, face_cell);
           if (pair.second < min_distance_square)
@@ -1037,7 +1036,7 @@ ReferenceCell::closest_point(const Point<dim> &p) const
               const auto cell_line_no =
                 face_to_cell_lines(face_no,
                                    face_line_no,
-                                   default_combined_face_orientation());
+                                   numbers::default_geometric_orientation);
               const auto v0 =
                 vertex<dim>(line_to_cell_vertices(cell_line_no, 0));
               const auto v1 =
@@ -1067,7 +1066,7 @@ ReferenceCell::closest_point(const Point<dim> &p) const
       switch (this->kind)
         {
           case ReferenceCells::Vertex:
-            Assert(false, ExcInternalError());
+            DEAL_II_ASSERT_UNREACHABLE();
             break;
             // the bounds for each dimension of a hypercube are mutually
             // independent:
@@ -1115,7 +1114,7 @@ ReferenceCell::closest_point(const Point<dim> &p) const
             }
             break;
           default:
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
         }
     }
   // We should be within 4 * eps of the cell by this point. The roundoff error

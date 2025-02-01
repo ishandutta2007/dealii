@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2008 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 for (X : TRIANGULATIONS; deal_II_dimension : DIMENSIONS;
      deal_II_space_dimension : SPACE_DIMENSIONS)
@@ -78,8 +77,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
 
       template std::map<unsigned int, types::global_vertex_index>
       compute_local_to_global_vertex_index_map(
-        const parallel::distributed::Triangulation<deal_II_dimension,
-                                                   deal_II_space_dimension>
+        const Triangulation<deal_II_dimension, deal_II_space_dimension>
           &triangulation);
 
       template std::pair<
@@ -193,6 +191,7 @@ for (deal_II_struct_dimension : DIMENSIONS; deal_II_dimension : DIMENSIONS;
           const unsigned int,
           const Triangulation<deal_II_dimension, deal_II_space_dimension> &,
           const Mapping<deal_II_dimension, deal_II_space_dimension> &,
+          std::vector<Quadrature<deal_II_space_dimension>> *,
           const bool) const;
 
       template internal::DistributedComputeIntersectionLocationsInternal<
@@ -280,12 +279,6 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
       rotate<deal_II_dimension>(
         const Tensor<1, deal_II_space_dimension, double> &,
         const double,
-        Triangulation<deal_II_dimension, deal_II_space_dimension> &);
-
-      template void
-      rotate<deal_II_dimension>(
-        const double,
-        const unsigned int,
         Triangulation<deal_II_dimension, deal_II_space_dimension> &);
 #  endif
 

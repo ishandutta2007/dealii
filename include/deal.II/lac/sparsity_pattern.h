@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2000 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_sparsity_pattern_h
 #define dealii_sparsity_pattern_h
@@ -20,9 +19,9 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/array_view.h>
+#include <deal.II/base/enable_observer_pointer.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/linear_index_iterator.h>
-#include <deal.II/base/subscriptor.h>
 
 #include <deal.II/lac/sparsity_pattern_base.h>
 
@@ -330,7 +329,7 @@ namespace SparsityPatternIterators
  * systems, it is rarely set up directly due to the way it stores its
  * information. Rather, one typically goes through an intermediate format
  * first, see for example the step-2 tutorial program as well as the
- * documentation module
+ * documentation topic
  * @ref Sparsity.
  *
  * You can iterate over entries in the pattern using begin(), end(),
@@ -514,8 +513,8 @@ public:
    *
    * This constructs objects intended for the application of the ILU(n)-method
    * or other incomplete decompositions.  Therefore, additional to the
-   * original entry structure, space for <tt>extra_off_diagonals</tt> side-
-   * diagonals is provided on both sides of the main diagonal.
+   * original entry structure, space for <tt>extra_off_diagonals</tt>
+   * side-diagonals is provided on both sides of the main diagonal.
    *
    * <tt>max_per_row</tt> is the maximum number of nonzero elements per row
    * which this structure is to hold. It is assumed that this number is
@@ -524,8 +523,8 @@ public:
    * will usually want to give the same number as you gave for
    * <tt>original</tt> plus the number of side diagonals times two. You may
    * however give a larger value if you wish to add further nonzero entries
-   * for the decomposition based on other criteria than their being on side-
-   * diagonals.
+   * for the decomposition based on other criteria than their being on
+   * side-diagonals.
    *
    * This function requires that <tt>original</tt> refers to a quadratic
    * matrix structure.  It must be compressed. The matrix structure is not
@@ -1409,14 +1408,15 @@ SparsityPattern::operator==(const SparsityPattern &sp2) const
     return false;
 
   if (rows > 0)
-    for (size_type i = 0; i < rows + 1; ++i)
-      if (rowstart[i] != sp2.rowstart[i])
-        return false;
+    {
+      for (size_type i = 0; i < rows + 1; ++i)
+        if (rowstart[i] != sp2.rowstart[i])
+          return false;
 
-  if (rows > 0)
-    for (size_type i = 0; i < rowstart[rows]; ++i)
-      if (colnums[i] != sp2.colnums[i])
-        return false;
+      for (size_type i = 0; i < rowstart[rows]; ++i)
+        if (colnums[i] != sp2.colnums[i])
+          return false;
+    }
 
   return true;
 }
@@ -1516,7 +1516,7 @@ inline void
 SparsityPattern::save(Archive &ar, const unsigned int) const
 {
   // forward to serialization function in the base class.
-  ar &boost::serialization::base_object<const Subscriptor>(*this);
+  ar &boost::serialization::base_object<const EnableObserverPointer>(*this);
 
   ar &max_dim &rows &cols &max_vec_len &max_row_length &compressed;
 
@@ -1539,7 +1539,7 @@ inline void
 SparsityPattern::load(Archive &ar, const unsigned int)
 {
   // forward to serialization function in the base class.
-  ar &boost::serialization::base_object<Subscriptor>(*this);
+  ar &boost::serialization::base_object<EnableObserverPointer>(*this);
 
   ar &max_dim &rows &cols &max_vec_len &max_row_length &compressed;
 

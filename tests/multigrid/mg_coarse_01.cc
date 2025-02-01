@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2016 - 2021 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2016 - 2023 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
 
  *
  * Test different coarse grid solvers in parallel (based on step-50)
@@ -550,6 +549,20 @@ namespace Step50
                                   matrix_t,
                                   LA::MPI::PreconditionAMG>
         coarse_grid_solver(coarse_solver, coarse_matrix, prec);
+
+      vcycle(coarse_grid_solver);
+      deallog << "coarse iterations: " << coarse_solver_control.last_step()
+              << std::endl;
+    }
+
+    {
+      deallog << "AMG:" << std::endl;
+
+      LA::MPI::PreconditionAMG prec;
+      prec.initialize(coarse_matrix);
+
+      MGCoarseGridApplyOperator<vector_t, LA::MPI::PreconditionAMG>
+        coarse_grid_solver(prec);
 
       vcycle(coarse_grid_solver);
       deallog << "coarse iterations: " << coarse_solver_control.last_step()

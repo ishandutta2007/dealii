@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2004 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_fe_dgp_monomial_h
 #define dealii_fe_dgp_monomial_h
@@ -32,8 +31,8 @@ DEAL_II_NAMESPACE_OPEN
 /**
  * Discontinuous finite elements based on monomials.
  *
- * This finite element implements complete polynomial spaces, that is, dim-
- * dimensional polynomials of degree p. For example, in 2d the element
+ * This finite element implements complete polynomial spaces, that is,
+ * dim-dimensional polynomials of degree p. For example, in 2d the element
  * FE_DGP(1) would represent the span of the functions $\{1,\hat x,\hat y\}$,
  * which is in contrast to the element FE_DGQ(1) that is formed by the span of
  * $\{1,\hat x,\hat y,\hat x\hat y\}$. Since the DGP space has only three

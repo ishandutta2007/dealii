@@ -1,24 +1,23 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2022 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2022 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_sparse_matrix_tools_h
 #define dealii_sparse_matrix_tools_h
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/mpi_compute_index_owner_internal.h>
+#include <deal.II/base/mpi_consensus_algorithms.h>
 
 #include <deal.II/dofs/dof_handler.h>
 
@@ -144,34 +143,6 @@ namespace SparseMatrixTools
   namespace internal
   {
     template <typename T>
-    std::tuple<T, T>
-    compute_prefix_sum(const T &value, const MPI_Comm comm)
-    {
-#  ifndef DEAL_II_WITH_MPI
-      (void)comm;
-      return {0, value};
-#  else
-      if (comm == MPI_COMM_SELF)
-        return {0, value}; // serial triangulation
-
-      T prefix = {};
-
-      int ierr =
-        MPI_Exscan(&value,
-                   &prefix,
-                   1,
-                   Utilities::MPI::mpi_type_id_for_type<decltype(value)>,
-                   MPI_SUM,
-                   comm);
-      AssertThrowMPI(ierr);
-
-      T sum = Utilities::MPI::sum(value, comm);
-
-      return {prefix, sum};
-#  endif
-    }
-
-    template <typename T>
     using get_mpi_communicator_t =
       decltype(std::declval<const T>().get_mpi_communicator());
 
@@ -239,26 +210,20 @@ namespace SparseMatrixTools
       std::vector<unsigned int> dummy(locally_active_dofs.n_elements());
 
       const auto local_size = get_local_size(system_matrix);
-      const auto prefix_sum = compute_prefix_sum(local_size, comm);
-      IndexSet   locally_owned_dofs(std::get<1>(prefix_sum));
-      locally_owned_dofs.add_range(std::get<0>(prefix_sum),
-                                   std::get<0>(prefix_sum) + local_size);
-
-      Utilities::MPI::internal::ComputeIndexOwner::ConsensusAlgorithmsPayload
-        process(locally_owned_dofs, locally_active_dofs, comm, dummy, true);
-
-      Utilities::MPI::ConsensusAlgorithms::Selector<
-        std::vector<
-          std::pair<types::global_dof_index, types::global_dof_index>>,
-        std::vector<unsigned int>>
-        consensus_algorithm;
-      consensus_algorithm.run(process, comm);
+      const auto [prefix_sum, total_sum] =
+        Utilities::MPI::partial_and_total_sum(local_size, comm);
+      IndexSet locally_owned_dofs(total_sum);
+      locally_owned_dofs.add_range(prefix_sum, prefix_sum + local_size);
 
       using T1 = std::vector<
         std::pair<types::global_dof_index,
                   std::vector<std::pair<types::global_dof_index, Number>>>>;
 
-      auto requesters = process.get_requesters();
+      std::map<unsigned int, IndexSet> requesters;
+      std::tie(std::ignore, requesters) =
+        Utilities::MPI::compute_index_owner_and_requesters(locally_owned_dofs,
+                                                           locally_active_dofs,
+                                                           comm);
 
       std::vector<std::vector<std::pair<types::global_dof_index, Number>>>
         locally_relevant_matrix_entries(locally_active_dofs.n_elements());
@@ -280,6 +245,10 @@ namespace SparseMatrixTools
 
       std::map<unsigned int, T1> data;
 
+      std::pair<types::global_dof_index,
+                std::vector<std::pair<types::global_dof_index, Number>>>
+        buffer;
+
       for (unsigned int i = 0; i < row_to_procs.size(); ++i)
         {
           if (row_to_procs[i].empty())
@@ -290,22 +259,13 @@ namespace SparseMatrixTools
 
           const unsigned int row_length = sparsity_pattern.row_length(row);
 
-
-          std::pair<types::global_dof_index,
-                    std::vector<std::pair<types::global_dof_index, Number>>>
-            buffer;
           buffer.first = row;
+          buffer.second.resize(row_length);
 
-          for (unsigned int i = 0; i < row_length; ++i)
-            {
-              buffer.second.emplace_back(entry->column(), entry->value());
+          for (unsigned int j = 0; j < row_length; ++j, ++entry)
+            buffer.second[j] = {entry->column(), entry->value()};
 
-              if (i + 1 != row_length)
-                ++entry;
-            }
-
-          for (const auto &proc :
-               row_to_procs[locally_owned_dofs.index_within_set(buffer.first)])
+          for (const auto &proc : row_to_procs[i])
             data[proc].emplace_back(buffer);
         }
 
@@ -488,7 +448,7 @@ namespace SparseMatrixTools
   {
     // 0) determine which rows are locally owned and which ones are remote
     const auto local_size = internal::get_local_size(system_matrix);
-    const auto prefix_sum = internal::compute_prefix_sum(
+    const auto prefix_sum = Utilities::MPI::partial_and_total_sum(
       local_size, internal::get_mpi_communicator(system_matrix));
     IndexSet locally_owned_dofs(std::get<1>(prefix_sum));
     locally_owned_dofs.add_range(std::get<0>(prefix_sum),

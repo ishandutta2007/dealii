@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2018 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/parameter_handler.h>
 
@@ -59,11 +58,16 @@ namespace Gmsh
                                            Triangulation<2, spacedim> &tria,
                                            const AdditionalParameters &prm)
   {
-    std::string base_name      = prm.output_base_name;
-    char        dir_template[] = "ctfbc-XXXXXX";
-    if (base_name.empty())
+    std::string base_name = prm.output_base_name;
+
+    // If necessary, create a temp directory to put files into. The
+    // following variable will hold the name of the tmp dir; it is
+    // initialized with a template, and 'mkdtemp' then overwrites it
+    // with the name of the directory it creates.
+    char tmp_dir_name[] = "ctfbc-XXXXXX";
+    if (prm.output_base_name.empty())
       {
-        const char *temp = mkdtemp(dir_template);
+        const char *temp = mkdtemp(tmp_dir_name);
         AssertThrow(temp != nullptr,
                     ExcMessage("Creating temporary directory failed!"));
         base_name = temp;
@@ -105,7 +109,8 @@ namespace Gmsh
     gridin.attach_triangulation(tria);
     gridin.read_msh(grid_file);
 
-    if (base_name != prm.output_base_name)
+    // Clean up files if a tmp directory was used:
+    if (prm.output_base_name.empty())
       {
         // declaring the list without a type, i.e.,
         //
@@ -125,10 +130,12 @@ namespace Gmsh
             AssertThrow(ret_value == 0,
                         ExcMessage("Failed to remove " + *filename));
           }
-        const auto ret_value = std::remove(dir_template);
+
+        // Finally also remove the tmp directory:
+        const auto ret_value = std::remove(tmp_dir_name);
         AssertThrow(ret_value == 0,
                     ExcMessage("Failed to remove " +
-                               std::string(dir_template)));
+                               std::string(tmp_dir_name)));
       }
   }
 #  endif

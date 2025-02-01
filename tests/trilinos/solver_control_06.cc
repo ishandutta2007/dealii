@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2017 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 
@@ -516,18 +515,22 @@ main(int argc, char *argv[])
   // We catch this output and it is written to the stdout logfile
   // Since we're interested in this output we read it back in and
   // write parts of it to the logstream
-  std::ifstream inputfile;
-  inputfile.open("stdout");
-  Assert(inputfile.good() && inputfile.is_open(), ExcIO());
-  std::string       line;
-  const std::string key = "*****";
-  while (std::getline(inputfile, line))
+  // We can only do this reliably if we are not running in parallel (sometimes
+  // stdout is not written yet otherwise)
+  if (Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) == 1)
     {
-      if (line.find(key) != std::string::npos)
-        deallog << line << std::endl;
+      std::ifstream inputfile;
+      inputfile.open("stdout");
+      Assert(inputfile.good() && inputfile.is_open(), ExcIO());
+      std::string       line;
+      const std::string key = "*****";
+      while (std::getline(inputfile, line))
+        {
+          if (line.find(key) != std::string::npos)
+            deallog << line << std::endl;
+        }
+      inputfile.close();
     }
-  inputfile.close();
-
   deallog << "OK" << std::endl;
 
   return 0;

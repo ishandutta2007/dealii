@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2022 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2021 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -48,7 +47,7 @@ namespace
       }
     else
       {
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
       }
 
     return dpo;
@@ -65,7 +64,7 @@ namespace
     if (degree == 1)
       n_dofs = 5;
     else
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
 
     return internal::expand(3, {{0, 0, 0, n_dofs}}, ReferenceCells::Pyramid);
   }
@@ -114,7 +113,7 @@ FE_PyramidPoly<dim, spacedim>::FE_PyramidPoly(
         }
     }
   else
-    Assert(false, ExcNotImplemented());
+    DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -164,7 +163,8 @@ std::string
 FE_PyramidP<dim, spacedim>::get_name() const
 {
   std::ostringstream namebuf;
-  namebuf << "FE_PyramidP<" << dim << ">(" << this->degree << ")";
+  namebuf << "FE_PyramidP<" << Utilities::dim_string(dim, spacedim) << ">("
+          << this->degree << ")";
 
   return namebuf.str();
 }
@@ -235,7 +235,7 @@ FE_PyramidP<dim, spacedim>::compare_for_domination(
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -333,7 +333,8 @@ std::string
 FE_PyramidDGP<dim, spacedim>::get_name() const
 {
   std::ostringstream namebuf;
-  namebuf << "FE_PyramidDGP<" << dim << ">(" << this->degree << ")";
+  namebuf << "FE_PyramidDGP<" << Utilities::dim_string(dim, spacedim) << ">("
+          << this->degree << ")";
 
   return namebuf.str();
 }

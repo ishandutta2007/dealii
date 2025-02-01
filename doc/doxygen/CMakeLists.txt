@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # Generate the source documentation via doxygen:
@@ -115,6 +114,23 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/options.dox
   )
 
+#
+# Set up DoxygenLayout.xml. Note that the "Modules" tab has been renamed to
+# "Topics" in Doxygen 1.9.8 to avoid confusion with C++ modules.
+# Unfortunately, this requires us to play a little bit of a configuration
+# dance:
+#
+if(${DOXYGEN_VERSION} VERSION_LESS 1.9.8)
+  set(_topics_layout_flag "<tab type=\"modules\" visible=\"yes\" title=\"\" intro=\"\"/>")
+else()
+  set(_topics_layout_flag "<tab type=\"topics\" visible=\"yes\" title=\"\" intro=\"\"/>")
+endif()
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/DoxygenLayout.xml.in
+  ${CMAKE_CURRENT_BINARY_DIR}/DoxygenLayout.xml
+  )
+
 # Figure out the last copyright date of any of the deal.II source
 # files. We will use this then to set the copyright date of the
 # doxygen-generated HTML files.
@@ -159,7 +175,8 @@ add_custom_command(
          ${CMAKE_CURRENT_BINARY_DIR}/footer.html
   COMMAND ${CMAKE_COMMAND} -E touch header.html
   COMMAND ${CMAKE_COMMAND} -E touch footer.html
-  COMMAND ${DOXYGEN_EXECUTABLE} -w html header.html footer.html style.css options.dox
+  COMMAND ${DOXYGEN_EXECUTABLE} -w html header.html footer.html
+                                   style.css options.dox
   COMMAND ${PERL_EXECUTABLE} -pi ${CMAKE_CURRENT_BINARY_DIR}/scripts/mod_header.pl header.html
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/options.dox
@@ -282,7 +299,7 @@ endif()
 # doxygen version 1.9.1 can not correctly parse C++20-style 'requires'
 # clauses and just drops certain classes and shows documentation for
 # DEAL_II_CXX20_REQUIRES instead. 1.9.7 gets this right, but has other
-# bugs. It's unclear for versions inbetween. Err on the safe side, and
+# bugs. It's unclear for versions in between. Err on the safe side, and
 # only make them visible to doxygen if we have at least 1.9.8.
 if(${DOXYGEN_VERSION} VERSION_LESS 1.9.8)
   message(STATUS "Suppressing 'requires' clause parsing because doxygen is too old")
@@ -320,7 +337,7 @@ add_custom_command(
     ${CMAKE_CURRENT_BINARY_DIR}/options.dox
     ${CMAKE_CURRENT_BINARY_DIR}/header.html
     ${CMAKE_CURRENT_BINARY_DIR}/footer.html
-    ${CMAKE_CURRENT_SOURCE_DIR}/DoxygenLayout.xml
+    ${CMAKE_CURRENT_BINARY_DIR}/DoxygenLayout.xml
     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/filter.pl
     ${_doxygen_depend}
     expand_all_instantiations

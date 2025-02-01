@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2009 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_index_set_h
 #define dealii_index_set_h
@@ -19,8 +18,12 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/exceptions.h>
+#include <deal.II/base/memory_space.h>
 #include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/mutex.h>
+#include <deal.II/base/trilinos_utilities.h>
+
+#include <deal.II/lac/trilinos_tpetra_types.h>
 
 #include <boost/container/small_vector.hpp>
 
@@ -136,8 +139,10 @@ public:
   /**
    * Constructor from a Trilinos Teuchos::RCP<Tpetra::Map>.
    */
+  template <typename NodeType>
   explicit IndexSet(
-    Teuchos::RCP<const Tpetra::Map<int, types::signed_global_dof_index>> map);
+    const Teuchos::RCP<
+      const Tpetra::Map<int, types::signed_global_dof_index, NodeType>> &map);
 #  endif // DEAL_II_TRILINOS_WITH_TPETRA
 
   /**
@@ -254,6 +259,11 @@ public:
   /**
    * Return whether the index set stored by this object contains no elements.
    * This is similar, but faster than checking <code>n_elements() == 0</code>.
+   *
+   * Note that a set being empty does not imply that the size of the
+   * index space must be zero. Rather, this function returns `true` if
+   * the subset of indices in the index space is the empty set,
+   * regardless of the size of the index space.
    */
   bool
   is_empty() const;
@@ -474,14 +484,24 @@ public:
   /**
    * Remove and return the last element of the last range.
    * This function throws an exception if the IndexSet is empty.
+   *
+   * @deprecated This function is deprecated. Conceptually, an index set is a
+   *   set; it should not be seen as a sorted container in which it is clear
+   *   what element is stored "last".
    */
+  DEAL_II_DEPRECATED_EARLY
   size_type
   pop_back();
 
   /**
    * Remove and return the first element of the first range.
    * This function throws an exception if the IndexSet is empty.
+   *
+   * @deprecated This function is deprecated. Conceptually, an index set is a
+   *   set; it should not be seen as a sorted container in which it is clear
+   *   what element is stored "first".
    */
+  DEAL_II_DEPRECATED_EARLY
   size_type
   pop_front();
 
@@ -602,11 +622,17 @@ public:
                     const bool     overlapping  = false) const;
 
 #  ifdef DEAL_II_TRILINOS_WITH_TPETRA
-  Tpetra::Map<int, types::signed_global_dof_index>
+  template <
+    typename NodeType =
+      LinearAlgebra::TpetraWrappers::TpetraTypes::NodeType<MemorySpace::Host>>
+  Tpetra::Map<int, types::signed_global_dof_index, NodeType>
   make_tpetra_map(const MPI_Comm communicator = MPI_COMM_WORLD,
                   const bool     overlapping  = false) const;
 
-  Teuchos::RCP<Tpetra::Map<int, types::signed_global_dof_index>>
+  template <
+    typename NodeType =
+      LinearAlgebra::TpetraWrappers::TpetraTypes::NodeType<MemorySpace::Host>>
+  Teuchos::RCP<Tpetra::Map<int, types::signed_global_dof_index, NodeType>>
   make_tpetra_map_rcp(const MPI_Comm communicator = MPI_COMM_WORLD,
                       const bool     overlapping  = false) const;
 #  endif

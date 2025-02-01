@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2008 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2008 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Martin Kronbichler, Uppsala University,
  *          Wolfgang Bangerth, Texas A&M University,
@@ -24,7 +23,6 @@
 // The first task as usual is to include the functionality of these well-known
 // deal.II library files and some C++ header files.
 #include <deal.II/base/quadrature_lib.h>
-#include <deal.II/base/logstream.h>
 #include <deal.II/base/function.h>
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/conditional_ostream.h>
@@ -63,7 +61,6 @@
 #include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/numerics/vector_tools.h>
-#include <deal.II/numerics/matrix_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/error_estimator.h>
 #include <deal.II/numerics/solution_transfer.h>
@@ -169,8 +166,8 @@ namespace Step32
 
       const double s = (r - R0) / h;
       const double q =
-        (dim == 3) ? std::max(0.0, cos(numbers::PI * abs(p(2) / R1))) : 1.0;
-      const double phi = std::atan2(p(0), p(1));
+        (dim == 3) ? std::max(0.0, cos(numbers::PI * abs(p[2] / R1))) : 1.0;
+      const double phi = std::atan2(p[0], p[1]);
       const double tau = s + 0.2 * s * (1 - s) * std::sin(6 * phi) * q;
 
       return T0 * (1.0 - tau) + T1 * tau;
@@ -213,7 +210,7 @@ namespace Step32
   // from the one used in step-31. Specifically, it is a right preconditioner,
   // implementing the matrix
   // @f{align*}{
-  //   \left(\begin{array}{cc}A^{-1} & B^T
+  //   \left(\begin{array}{cc}A^{-1} & -A^{-1}B^TS^{-1}
   //                        \\0 & S^{-1}
   // \end{array}\right)
   // @f}
@@ -227,7 +224,7 @@ namespace Step32
   namespace LinearSolvers
   {
     template <class PreconditionerTypeA, class PreconditionerTypeMp>
-    class BlockSchurPreconditioner : public Subscriptor
+    class BlockSchurPreconditioner : public EnableObserverPointer
     {
     public:
       BlockSchurPreconditioner(const TrilinosWrappers::BlockSparseMatrix &S,
@@ -280,9 +277,9 @@ namespace Step32
       }
 
     private:
-      const SmartPointer<const TrilinosWrappers::BlockSparseMatrix>
+      const ObserverPointer<const TrilinosWrappers::BlockSparseMatrix>
         stokes_matrix;
-      const SmartPointer<const TrilinosWrappers::BlockSparseMatrix>
+      const ObserverPointer<const TrilinosWrappers::BlockSparseMatrix>
                                   stokes_preconditioner_matrix;
       const PreconditionerTypeMp &mp_preconditioner;
       const PreconditionerTypeA  &a_preconditioner;
@@ -295,7 +292,7 @@ namespace Step32
   // @sect3{Definition of assembly data structures}
   //
   // As described in the introduction, we will use the WorkStream mechanism
-  // discussed in the @ref threads module to parallelize operations among the
+  // discussed in the @ref threads topic to parallelize operations among the
   // processors of a single machine. The WorkStream class requires that data
   // is passed around in two kinds of data structures, one for scratch data
   // and one to pass data from the assembly function to the function that
@@ -852,7 +849,7 @@ namespace Step32
     TrilinosWrappers::MPI::BlockVector stokes_rhs;
 
 
-    FE_Q<dim>                 temperature_fe;
+    const FE_Q<dim>           temperature_fe;
     DoFHandler<dim>           temperature_dof_handler;
     AffineConstraints<double> temperature_constraints;
 
@@ -1003,7 +1000,7 @@ namespace Step32
         parameter_file.close();
 
         std::ofstream parameter_out(parameter_filename);
-        prm.print_parameters(parameter_out, ParameterHandler::Text);
+        prm.print_parameters(parameter_out, ParameterHandler::PRM);
 
         AssertThrow(
           false,
@@ -1978,7 +1975,7 @@ namespace Step32
   // @sect4{The BoussinesqFlowProblem assembly functions}
   //
   // Following the discussion in the introduction and in the @ref threads
-  // module, we split the assembly functions into different parts:
+  // topic, we split the assembly functions into different parts:
   //
   // <ul> <li> The local calculations of matrices and right hand sides, given
   // a certain cell as input (these functions are named
@@ -2114,7 +2111,7 @@ namespace Step32
     const QGauss<dim> quadrature_formula(parameters.stokes_velocity_degree + 1);
 
     using CellFilter =
-      FilteredIterator<typename DoFHandler<2>::active_cell_iterator>;
+      FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
 
     auto worker =
       [this](const typename DoFHandler<dim>::active_cell_iterator &cell,
@@ -2163,12 +2160,10 @@ namespace Step32
 
     assemble_stokes_preconditioner();
 
-    std::vector<std::vector<bool>>   constant_modes;
-    const FEValuesExtractors::Vector velocity_components(0);
-    DoFTools::extract_constant_modes(stokes_dof_handler,
-                                     stokes_fe.component_mask(
-                                       velocity_components),
-                                     constant_modes);
+    const FEValuesExtractors::Vector     velocity_components(0);
+    const std::vector<std::vector<bool>> constant_modes =
+      DoFTools::extract_constant_modes(
+        stokes_dof_handler, stokes_fe.component_mask(velocity_components));
 
     Mp_preconditioner =
       std::make_shared<TrilinosWrappers::PreconditionJacobi>();
@@ -2868,11 +2863,15 @@ namespace Step32
     // minimal mesh size as in step-31, we compute local CFL numbers, i.e., on
     // each cell we compute the maximum velocity times the mesh size, and
     // compute the maximum of them. Hence, we need to choose the factor in
-    // front of the time step slightly smaller.
+    // front of the time step slightly smaller. (We later re-considered this
+    // approach towards time stepping. If you're curious about this, you may
+    // want to read the time stepping section in @cite HDGB17 .)
     //
-    // After temperature right hand side assembly, we solve the linear system
-    // for temperature (with fully distributed vectors without any ghosts),
-    // apply constraints and copy the vector back to one with ghosts.
+    // After temperature right hand side assembly, we solve the linear
+    // system for temperature (with fully distributed vectors without
+    // ghost elements and using the solution from the last timestep as
+    // our initial guess for the iterative solver), apply constraints,
+    // and copy the vector back to one with ghosts.
     //
     // In the end, we extract the temperature range similarly to step-31 to
     // produce some output (for example in order to help us choose the
@@ -2896,7 +2895,6 @@ namespace Step32
             << "Time step: " << time_step / EquationData::year_in_seconds
             << " years" << std::endl;
 
-      temperature_solution = old_temperature_solution;
       assemble_temperature_system(maximal_velocity);
     }
 
@@ -2910,7 +2908,7 @@ namespace Step32
 
       TrilinosWrappers::MPI::Vector distributed_temperature_solution(
         temperature_rhs);
-      distributed_temperature_solution = temperature_solution;
+      distributed_temperature_solution = old_temperature_solution;
 
       cg.solve(temperature_matrix,
                distributed_temperature_solution,
@@ -3219,7 +3217,7 @@ namespace Step32
     data_out.write_vtu_with_pvtu_record(
       "./", "solution", out_index, MPI_COMM_WORLD, 5);
 
-    out_index++;
+    ++out_index;
   }
 
 
@@ -3326,8 +3324,8 @@ namespace Step32
         temperature_constraints.distribute(distributed_temp1);
         temperature_constraints.distribute(distributed_temp2);
 
-        temperature_solution     = std::move(distributed_temp1);
-        old_temperature_solution = std::move(distributed_temp2);
+        temperature_solution     = distributed_temp1;
+        old_temperature_solution = distributed_temp2;
       }
 
       {
@@ -3344,8 +3342,8 @@ namespace Step32
         stokes_constraints.distribute(distributed_stokes);
         stokes_constraints.distribute(old_distributed_stokes);
 
-        stokes_solution     = std::move(distributed_stokes);
-        old_stokes_solution = std::move(old_distributed_stokes);
+        stokes_solution     = distributed_stokes;
+        old_stokes_solution = old_distributed_stokes;
       }
     }
   }

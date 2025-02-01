@@ -1,21 +1,21 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2020 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2020 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_mg_transfer_global_coarsening_h
 #define dealii_mg_transfer_global_coarsening_h
 
+#include <deal.II/base/memory_space.h>
 #include <deal.II/base/mg_level_object.h>
 #include <deal.II/base/mpi_remote_point_evaluation.h>
 #include <deal.II/base/vectorization.h>
@@ -26,6 +26,7 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 #include <deal.II/matrix_free/constraint_info.h>
+#include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/shape_info.h>
 
 #include <deal.II/multigrid/mg_base.h>
@@ -50,10 +51,17 @@ namespace RepartitioningPolicyTools
   class Base;
 }
 
-template <int dim, typename Number>
+template <int dim,
+          typename Number,
+          typename MemorySpace = ::dealii::MemorySpace::Host>
 class MGTransferMF;
 #endif
 
+
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 namespace mg
 {
@@ -207,66 +215,34 @@ namespace MGTransferGlobalCoarseningTools
 } // namespace MGTransferGlobalCoarseningTools
 
 
-/**
- * Abstract base class for transfer operators between two multigrid levels.
- */
-template <typename VectorType>
-class MGTwoLevelTransferBase : public Subscriptor
-{
-public:
-  /**
-   * Perform prolongation.
-   */
-  virtual void
-  prolongate_and_add(VectorType &dst, const VectorType &src) const = 0;
-
-  /**
-   * Perform restriction.
-   */
-  virtual void
-  restrict_and_add(VectorType &dst, const VectorType &src) const = 0;
-
-  /**
-   * Perform interpolation of a solution vector from the fine level to the
-   * coarse level. This function is different from restriction, where a
-   * weighted residual is transferred to a coarser level (transposition of
-   * prolongation matrix).
-   */
-  virtual void
-  interpolate(VectorType &dst, const VectorType &src) const = 0;
-
-  /**
-   * Enable inplace vector operations if external and internal vectors
-   * are compatible.
-   */
-  virtual void
-  enable_inplace_operations_if_possible(
-    const std::shared_ptr<const Utilities::MPI::Partitioner>
-      &partitioner_coarse,
-    const std::shared_ptr<const Utilities::MPI::Partitioner>
-      &partitioner_fine) = 0;
-
-  /**
-   * Return the memory consumption of the allocated memory in this class.
-   */
-  virtual std::size_t
-  memory_consumption() const = 0;
-};
-
 
 /**
- * Base class for transfer operators between two multigrid levels.
- * Specialization for LinearAlgebra::distributed::Vector. The implementation of
+ * An abstract base class for transfer operators between two multigrid levels.
+ * The implementation of
  * restriction and prolongation between levels is delegated to derived classes,
  * which implement prolongate_and_add_internal() and restrict_and_add_internal()
  * accordingly.
  */
-template <typename Number>
-class MGTwoLevelTransferBase<LinearAlgebra::distributed::Vector<Number>>
-  : public Subscriptor
+template <typename VectorType>
+class MGTwoLevelTransferBase : public EnableObserverPointer
 {
 public:
-  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+  static_assert(
+    std::is_same_v<
+      VectorType,
+      LinearAlgebra::distributed::Vector<typename VectorType::value_type,
+                                         MemorySpace::Host>> ||
+      std::is_same_v<
+        VectorType,
+        LinearAlgebra::distributed::Vector<typename VectorType::value_type,
+                                           MemorySpace::Default>>,
+    "This class is currently only implemented for vectors of "
+    "type LinearAlgebra::distributed::Vector.");
+
+  /**
+   * The scalar type used by the vector-type template argument.
+   */
+  using Number = typename VectorType::value_type;
 
   /**
    * Default constructor.
@@ -274,29 +250,33 @@ public:
   MGTwoLevelTransferBase();
 
   /**
-   * Perform prolongation.
+   * Perform prolongation on a solution vector.
    */
   void
   prolongate_and_add(VectorType &dst, const VectorType &src) const;
 
   /**
-   * Perform restriction.
+   * Perform restriction on a residual vector.
    */
   void
   restrict_and_add(VectorType &dst, const VectorType &src) const;
 
   /**
    * Perform interpolation of a solution vector from the fine level to the
-   * coarse level.
+   * coarse level. This function is different from restriction, where a
+   * weighted residual is transferred to a coarser level (transposition of
+   * prolongation matrix). In other words, restriction acts on right hand
+   * side vectors, whereas interpolation acts on solution vectors.
    */
   virtual void
   interpolate(VectorType &dst, const VectorType &src) const = 0;
 
   /**
    * Enable inplace vector operations if external and internal vectors
-   * are compatible.
+   * are compatible. The returned pair indicates if the operation
+   * was successful on the coarse and the fine level.
    */
-  virtual void
+  virtual std::pair<bool, bool>
   enable_inplace_operations_if_possible(
     const std::shared_ptr<const Utilities::MPI::Partitioner>
       &partitioner_coarse,
@@ -314,17 +294,13 @@ protected:
    * Perform prolongation on vectors with correct ghosting.
    */
   virtual void
-  prolongate_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const = 0;
+  prolongate_and_add_internal(VectorType &dst, const VectorType &src) const = 0;
 
   /**
    * Perform restriction on vectors with correct ghosting.
    */
   virtual void
-  restrict_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const = 0;
+  restrict_and_add_internal(VectorType &dst, const VectorType &src) const = 0;
 
   /**
    * A wrapper around update_ghost_values() optimized in case the
@@ -332,8 +308,7 @@ protected:
    * partitioners.
    */
   void
-  update_ghost_values(
-    const LinearAlgebra::distributed::Vector<Number> &vec) const;
+  update_ghost_values(const VectorType &vec) const;
 
   /**
    * A wrapper around compress() optimized in case the
@@ -341,8 +316,7 @@ protected:
    * partitioners.
    */
   void
-  compress(LinearAlgebra::distributed::Vector<Number> &vec,
-           const VectorOperation::values               op) const;
+  compress(VectorType &vec, const VectorOperation::values op) const;
 
   /**
    * A wrapper around zero_out_ghost_values() optimized in case the
@@ -350,24 +324,23 @@ protected:
    * partitioners.
    */
   void
-  zero_out_ghost_values(
-    const LinearAlgebra::distributed::Vector<Number> &vec) const;
+  zero_out_ghost_values(const VectorType &vec) const;
 
   /**
    * Enable inplace vector operations if external and internal vectors
    * are compatible.
    */
-  template <int dim, std::size_t width>
-  void
+  template <int dim, std::size_t width, typename IndexType>
+  std::pair<bool, bool>
   internal_enable_inplace_operations_if_possible(
     const std::shared_ptr<const Utilities::MPI::Partitioner>
       &partitioner_coarse,
     const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner_fine,
     bool &vec_fine_needs_ghost_update,
-    internal::MatrixFreeFunctions::ConstraintInfo<
-      dim,
-      VectorizedArray<Number, width>> &constraint_info_coarse,
-    std::vector<unsigned int>         &dof_indices_fine);
+    internal::MatrixFreeFunctions::
+      ConstraintInfo<dim, VectorizedArray<Number, width>, IndexType>
+                              &constraint_info_coarse,
+    std::vector<unsigned int> &dof_indices_fine);
 
   /**
    * Flag if the finite elements on the fine cells are continuous. If yes,
@@ -389,9 +362,9 @@ public:
 
 protected:
   /**
-   * Internal vector on that the actual prolongation/restriction is performed.
+   * Internal vector on which the actual prolongation/restriction is performed.
    */
-  mutable LinearAlgebra::distributed::Vector<Number> vec_coarse;
+  mutable VectorType vec_coarse;
 
   /**
    * Internal vector needed for collecting all degrees of freedom of the fine
@@ -400,7 +373,7 @@ protected:
    * accessed by the given vectors in the prolongate/restrict functions),
    * otherwise it is left at size zero.
    */
-  mutable LinearAlgebra::distributed::Vector<Number> vec_fine;
+  mutable VectorType vec_fine;
 
   /**
    * Bool indicating whether fine vector has relevant ghost values.
@@ -436,66 +409,57 @@ protected:
 
 
 /**
- * Class for transfer between two multigrid levels for p- or global coarsening.
+ * Class for transfer between two multigrid levels for p- or global
+ * coarsening. It relies on a list of DoF indices associated with the cells on
+ * the coarse and fine side of the transfer, and implements a cell-by-cell
+ * (matrix-free) interpolation setup with the reference-cell embedding
+ * matrices.
  *
  * The implementation of this class is explained in detail in @cite munch2022gc.
+ *
+ * There are two possible ways to use this class. In the first option, the
+ * transfer is built from the underlying DoFHandler and AffineConstraints
+ * objects on the coarse and fine side, collecting an explicit copy of all
+ * indices on both sides. This works for a relatively wide set of
+ * FiniteElement combinations, including p-adaptive schemes using
+ * hp::FECollection. The second, more setup-efficient approach is to build the
+ * transfer between two multigrid levels for polynomial coarsening
+ * (p-coarsening) from two MatrixFree objects that might already exist from
+ * other parts of the code. In this case, we require that both objects share
+ * the same triangulation (but differ through their DoFHandler descriptions)
+ * and are described by the respective DoFHandler/AffineConstraints pair. This
+ * second variant is more efficient because no queries to the DoFHandler need
+ * to be made, reducing both the setup time and the overall memory
+ * consumption. Note that not all options are supported for the second entry
+ * point, and we fall back to the first option in such a case.
  */
 template <int dim, typename VectorType>
 class MGTwoLevelTransfer : public MGTwoLevelTransferBase<VectorType>
 {
 public:
-  /**
-   * Perform prolongation.
-   */
-  void
-  prolongate_and_add(VectorType &dst, const VectorType &src) const override;
+  static_assert(
+    std::is_same_v<
+      VectorType,
+      LinearAlgebra::distributed::Vector<typename VectorType::value_type,
+                                         MemorySpace::Host>> ||
+      std::is_same_v<
+        VectorType,
+        LinearAlgebra::distributed::Vector<typename VectorType::value_type,
+                                           MemorySpace::Default>>,
+    "This class is currently only implemented for vectors of "
+    "type LinearAlgebra::distributed::Vector.");
 
   /**
-   * Perform restriction.
+   * The scalar type used by the vector-type template argument.
    */
-  void
-  restrict_and_add(VectorType &dst, const VectorType &src) const override;
+  using Number = typename VectorType::value_type;
 
   /**
-   * Perform interpolation of a solution vector from the fine level to the
-   * coarse level.
+   * A data type representing a vectorized array of the same kind of objects
+   * stored in the `VectorType`.
    */
-  void
-  interpolate(VectorType &dst, const VectorType &src) const override;
-
-  /**
-   * Enable inplace vector operations if external and internal vectors
-   * are compatible.
-   */
-  void
-  enable_inplace_operations_if_possible(
-    const std::shared_ptr<const Utilities::MPI::Partitioner>
-      &partitioner_coarse,
-    const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner_fine)
-    override;
-
-  /**
-   * Return the memory consumption of the allocated memory in this class.
-   */
-  std::size_t
-  memory_consumption() const override;
-};
-
-
-
-/**
- * Class for transfer between two multigrid levels for p- or global coarsening.
- * Specialization for LinearAlgebra::distributed::Vector.
- *
- * The implementation of this class is explained in detail in @cite munch2022gc.
- */
-template <int dim, typename Number>
-class MGTwoLevelTransfer<dim, LinearAlgebra::distributed::Vector<Number>>
-  : public MGTwoLevelTransferBase<LinearAlgebra::distributed::Vector<Number>>
-{
   using VectorizedArrayType = VectorizedArray<Number>;
 
-public:
   /**
    * Set up global coarsening between the given DoFHandler objects (
    * @p dof_handler_fine and @p dof_handler_coarse). The transfer
@@ -533,7 +497,7 @@ public:
     const unsigned int mg_level_coarse = numbers::invalid_unsigned_int);
 
   /**
-   * Set up transfer operator between the given DoFHandler objects (
+   * Set up the transfer operator between the given DoFHandler objects (
    * @p dof_handler_fine and @p dof_handler_coarse). Depending on the
    * underlying Triangulation objects polynomial or geometrical global
    * coarsening is performed.
@@ -556,6 +520,21 @@ public:
          const unsigned int mg_level_coarse = numbers::invalid_unsigned_int);
 
   /**
+   * Set up polynomial coarsening between the DoFHandler objects underlying
+   * two MatrixFree objects and the respective numbers for the DoFHandler
+   * objects within MatrixFree. This reinit() function allows for a more
+   * efficient setup of the transfer operator and reduces the overall memory
+   * consumption of a multigrid cycle in case the same MatrixFree objects are
+   * also used for smoothers and residual evaluation on the two involved
+   * levels.
+   */
+  void
+  reinit(const MatrixFree<dim, Number> &matrix_free_fine,
+         const unsigned int             dof_no_fine,
+         const MatrixFree<dim, Number> &matrix_free_coarse,
+         const unsigned int             dof_no_coarse);
+
+  /**
    * Check if a fast templated version of the polynomial transfer between
    * @p fe_degree_fine and @p fe_degree_coarse is available.
    *
@@ -568,19 +547,16 @@ public:
                                      const unsigned int fe_degree_coarse);
 
   /**
-   * Perform interpolation of a solution vector from the fine level to the
-   * coarse level.
+   * @copydoc MGTwoLevelTransferBase::interpolate
    */
   void
-  interpolate(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  interpolate(VectorType &dst, const VectorType &src) const override;
 
   /**
    * Enable inplace vector operations if external and internal vectors
    * are compatible.
    */
-  void
+  std::pair<bool, bool>
   enable_inplace_operations_if_possible(
     const std::shared_ptr<const Utilities::MPI::Partitioner>
       &partitioner_coarse,
@@ -595,14 +571,12 @@ public:
 
 protected:
   void
-  prolongate_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  prolongate_and_add_internal(VectorType       &dst,
+                              const VectorType &src) const override;
 
   void
-  restrict_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  restrict_and_add_internal(VectorType       &dst,
+                            const VectorType &src) const override;
 
 private:
   /**
@@ -648,31 +622,21 @@ private:
     unsigned int degree_fine;
 
     /**
-     * Prolongation matrix for non-tensor-product elements.
+     * Prolongation matrix used for the prolongate_and_add() and
+     * restrict_and_add() functions.
      */
-    AlignedVector<VectorizedArrayType> prolongation_matrix;
+    AlignedVector<double> prolongation_matrix;
 
     /**
-     * 1d prolongation matrix for tensor-product elements.
+     * Restriction matrix used for the interpolate() function.
      */
-    AlignedVector<VectorizedArrayType> prolongation_matrix_1d;
-
-    /**
-     * Restriction matrix for non-tensor-product elements.
-     */
-    AlignedVector<VectorizedArrayType> restriction_matrix;
-
-    /**
-     * 1d restriction matrix for tensor-product elements.
-     */
-    AlignedVector<VectorizedArrayType> restriction_matrix_1d;
+    AlignedVector<double> restriction_matrix;
 
     /**
      * ShapeInfo description of the coarse cell. Needed during the
      * fast application of hanging-node constraints.
      */
-    internal::MatrixFreeFunctions::ShapeInfo<VectorizedArrayType>
-      shape_info_coarse;
+    internal::MatrixFreeFunctions::ShapeInfo<double> shape_info_coarse;
   };
 
   /**
@@ -684,25 +648,74 @@ private:
    * Helper class for reading from and writing to global coarse vectors and for
    * applying constraints.
    */
-  internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArrayType>
-    constraint_info_coarse;
+  internal::MatrixFreeFunctions::
+    ConstraintInfo<dim, VectorizedArrayType, types::global_dof_index>
+      constraint_info_coarse;
 
   /**
    * Helper class for reading from and writing to global fine vectors.
    */
-  internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArrayType>
-    constraint_info_fine;
+  internal::MatrixFreeFunctions::
+    ConstraintInfo<dim, VectorizedArrayType, types::global_dof_index>
+      constraint_info_fine;
+
+  struct MatrixFreeRelatedData
+  {
+    /**
+     * Matrix-free object on the fine side.
+     */
+    ObserverPointer<const MatrixFree<dim, Number>> matrix_free_fine;
+
+    /**
+     * Index within the list of DoFHandler objects in the matrix_free_fine
+     * object.
+     */
+    unsigned int dof_handler_index_fine;
+
+    /**
+     * Matrix-free object on the coarse side.
+     */
+    ObserverPointer<const MatrixFree<dim, Number>> matrix_free_coarse;
+
+    /**
+     * Index within the list of DoFHandler objects in the matrix_free_coarse
+     * object.
+     */
+    unsigned int dof_handler_index_coarse;
+
+    /**
+     * The two matrix-free objects will in general not agree on the order the
+     * cells are traversed. Thus, the loop will be run by the matrix-free object
+     * on the fine side, and the coarse side will adapt to those cell indices.
+     */
+    std::vector<std::array<unsigned int, VectorizedArrayType::size()>>
+      cell_list_fine_to_coarse;
+  };
 
   /**
-   * Weights for continuous elements.
+   * In case this class is built with MatrixFree objects (see the respective
+   * reinit() function), we set up this data structure and skip the other
+   * fields of the class.
    */
-  std::vector<Number> weights; // TODO: vectorize
+  std::unique_ptr<MatrixFreeRelatedData> matrix_free_data;
 
   /**
-   * Weights for continuous elements, compressed into 3^dim doubles per
-   * cell if possible.
+   * CRS-like pointer to the start into the weights array, as that array can
+   * be compressed or in full format.
    */
-  AlignedVector<VectorizedArrayType> weights_compressed;
+  std::vector<unsigned int> weights_start;
+
+  /**
+   * Weights for continuous elements, either in full format or compressed into
+   * 3^dim doubles per cell if possible.
+   */
+  AlignedVector<VectorizedArrayType> weights;
+
+  /**
+   * Store whether the weights are in compressed format or not, in the
+   * ordering of the weights_start array.
+   */
+  std::vector<unsigned char> weights_are_compressed;
 
   /**
    * Number of components.
@@ -712,70 +725,35 @@ private:
   /**
    * Pointer to the DoFHandler object used during initialization.
    */
-  SmartPointer<const DoFHandler<dim>> dof_handler_fine;
+  ObserverPointer<const DoFHandler<dim>> dof_handler_fine;
 
   /**
-   * Muligird level used during initialization.
+   * Multigrid level used during initialization.
    */
   unsigned int mg_level_fine;
 
   friend class internal::MGTwoLevelTransferImplementation;
 
-  friend class MGTransferMF<dim, Number>;
+  friend class MGTransferMF<dim, Number, typename VectorType::memory_space>;
 };
 
 
 
 /**
  * Class for transfer between two non-nested multigrid levels.
- *
  */
 template <int dim, typename VectorType>
 class MGTwoLevelTransferNonNested : public MGTwoLevelTransferBase<VectorType>
 {
-public:
-  /**
-   * Perform prolongation.
-   */
-  void
-  prolongate_and_add(VectorType &dst, const VectorType &src) const override;
-
-  /**
-   * Perform restriction.
-   */
-  void
-  restrict_and_add(VectorType &dst, const VectorType &src) const override;
-
-  /**
-   * Perform interpolation of a solution vector from the fine level to the
-   * coarse level. This function is different from restriction, where a
-   * weighted residual is transferred to a coarser level (transposition of
-   * prolongation matrix).
-   */
-  void
-  interpolate(VectorType &dst, const VectorType &src) const override;
-
-  /**
-   * Return the memory consumption of the allocated memory in this class.
-   */
-  std::size_t
-  memory_consumption() const override;
-};
-
-
-
-/**
- * Class for transfer between two non-nested multigrid levels.
- *
- * Specialization for LinearAlgebra::distributed::Vector.
- *
- */
-template <int dim, typename Number>
-class MGTwoLevelTransferNonNested<dim,
-                                  LinearAlgebra::distributed::Vector<Number>>
-  : public MGTwoLevelTransferBase<LinearAlgebra::distributed::Vector<Number>>
-{
 private:
+  static_assert(
+    std::is_same_v<
+      VectorType,
+      LinearAlgebra::distributed::Vector<typename VectorType::value_type>>,
+    "This class is currently only implemented for vectors of "
+    "type LinearAlgebra::distributed::Vector.");
+
+  using Number              = typename VectorType::value_type;
   using VectorizedArrayType = VectorizedArray<Number, 1>;
 
   mg::SignalsNonNested signals_non_nested;
@@ -829,6 +807,9 @@ public:
     bool enforce_all_points_found;
   };
 
+  /**
+   * Constructor.
+   */
   MGTwoLevelTransferNonNested(const AdditionalData &data = AdditionalData());
 
   /**
@@ -852,15 +833,13 @@ public:
    * prolongation matrix).
    */
   void
-  interpolate(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  interpolate(VectorType &dst, const VectorType &src) const override;
 
   /**
    * Enable inplace vector operations if external and internal vectors
    * are compatible.
    */
-  void
+  std::pair<bool, bool>
   enable_inplace_operations_if_possible(
     const std::shared_ptr<const Utilities::MPI::Partitioner>
       &partitioner_coarse,
@@ -903,17 +882,15 @@ protected:
    * Perform prolongation.
    */
   void
-  prolongate_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  prolongate_and_add_internal(VectorType       &dst,
+                              const VectorType &src) const override;
 
   /**
    * Perform restriction.
    */
   void
-  restrict_and_add_internal(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const override;
+  restrict_and_add_internal(VectorType       &dst,
+                            const VectorType &src) const override;
 
 private:
   /**
@@ -921,23 +898,20 @@ private:
    */
   template <int n_components>
   void
-  prolongate_and_add_internal_comp(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const;
+  prolongate_and_add_internal_comp(VectorType       &dst,
+                                   const VectorType &src) const;
 
   /**
    * Perform restriction for correct number of components.
    */
   template <int n_components>
   void
-  restrict_and_add_internal_comp(
-    LinearAlgebra::distributed::Vector<Number>       &dst,
-    const LinearAlgebra::distributed::Vector<Number> &src) const;
+  restrict_and_add_internal_comp(VectorType &dst, const VectorType &src) const;
 
   /**
    * Pointer to the DoFHandler object used during initialization.
    */
-  SmartPointer<const DoFHandler<dim>> dof_handler_fine;
+  ObserverPointer<const DoFHandler<dim>> dof_handler_fine;
 
   /**
    * Multigrid level used during initialization.
@@ -951,6 +925,16 @@ private:
   Utilities::MPI::RemotePointEvaluation<dim> rpe;
 
   /**
+   * Vectors for input/output for rpe.
+   */
+  mutable std::vector<Number> rpe_input_output;
+
+  /**
+   * Buffers to be reused by rpe.
+   */
+  mutable std::vector<Number> rpe_buffer;
+
+  /**
    * MappingInfo object needed as Mapping argument by FEPointEvaluation.
    */
   std::shared_ptr<NonMatching::MappingInfo<dim, dim, Number>> mapping_info;
@@ -959,8 +943,9 @@ private:
    * Helper class for reading from and writing to global vectors and for
    * applying constraints.
    */
-  internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArrayType>
-    constraint_info;
+  internal::MatrixFreeFunctions::
+    ConstraintInfo<dim, VectorizedArrayType, unsigned int>
+      constraint_info;
 
   /**
    * Finite element of the coarse DoFHandler passed to reinit().
@@ -980,7 +965,7 @@ private:
    */
   std::vector<unsigned int> level_dof_indices_fine_ptrs;
 
-  friend class MGTransferMF<dim, Number>;
+  friend class MGTransferMF<dim, Number, typename VectorType::memory_space>;
 };
 
 
@@ -1007,21 +992,21 @@ private:
  * refined meshes.
  *
  * This class currently only works for the tensor-product finite elements
- * FE_Q and FE_DGQ and simplex elements FE_SimplexP and FE_SimplexDGP as well as
- * for systems involving multiple components of one of these elements. Other
- * elements are currently not implemented.
+ * FE_Q, FE_DGQ, and FE_DGP and simplex elements FE_SimplexP and FE_SimplexDGP
+ * as well as for systems involving multiple components of one of these
+ * elements. Other elements are currently not implemented.
  *
  * The implementation of this class is explained in detail in @cite munch2022gc.
  */
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 class MGTransferMF : public dealii::MGLevelGlobalTransfer<
-                       LinearAlgebra::distributed::Vector<Number>>
+                       LinearAlgebra::distributed::Vector<Number, MemorySpace>>
 {
 public:
   /**
    * Value type.
    */
-  using VectorType = LinearAlgebra::distributed::Vector<Number>;
+  using VectorType = LinearAlgebra::distributed::Vector<Number, MemorySpace>;
 
   /**
    * Default constructor.
@@ -1277,8 +1262,8 @@ private:
    */
   void
   initialize_internal_transfer(
-    const DoFHandler<dim>                       &dof_handler,
-    const SmartPointer<const MGConstrainedDoFs> &mg_constrained_dofs);
+    const DoFHandler<dim>                          &dof_handler,
+    const ObserverPointer<const MGConstrainedDoFs> &mg_constrained_dofs);
 
   /**
    * Retrieve finest DoFHandler from two-level transfer objects.
@@ -1331,7 +1316,7 @@ private:
   /**
    * Collection of the two-level transfer operators.
    */
-  MGLevelObject<SmartPointer<MGTwoLevelTransferBase<VectorType>>> transfer;
+  MGLevelObject<ObserverPointer<MGTwoLevelTransferBase<VectorType>>> transfer;
 
   /**
    * External partitioners used during initialize_dof_vector().
@@ -1349,13 +1334,17 @@ private:
  */
 template <int dim, typename Number>
 class MGTransferBlockMF
-  : public MGTransferBlockMatrixFreeBase<dim, Number, MGTransferMF<dim, Number>>
+  : public MGTransferBlockMatrixFreeBase<
+      dim,
+      Number,
+      MGTransferMF<dim, Number, ::dealii::MemorySpace::Host>>
 {
 public:
   /**
    * Constructor.
    */
-  MGTransferBlockMF(const MGTransferMF<dim, Number> &transfer_operator);
+  MGTransferBlockMF(const MGTransferMF<dim, Number, ::dealii::MemorySpace::Host>
+                      &transfer_operator);
 
   /**
    * Constructor.
@@ -1412,32 +1401,37 @@ public:
   build(const std::vector<const DoFHandler<dim> *> &dof_handler);
 
 protected:
-  const MGTransferMF<dim, Number> &
+  const MGTransferMF<dim, Number, ::dealii::MemorySpace::Host> &
   get_matrix_free_transfer(const unsigned int b) const override;
 
 private:
   /**
    * Internal non-block version of transfer operation.
    */
-  std::vector<MGTransferMF<dim, Number>> transfer_operators_internal;
+  std::vector<MGTransferMF<dim, Number, ::dealii::MemorySpace::Host>>
+    transfer_operators_internal;
 
   /**
    * Non-block version of transfer operation.
    */
-  std::vector<SmartPointer<const MGTransferMF<dim, Number>>> transfer_operators;
+  std::vector<ObserverPointer<
+    const MGTransferMF<dim, Number, ::dealii::MemorySpace::Host>>>
+    transfer_operators;
 };
 
 
 
 template <int dim, typename VectorType>
-using MGTransferGlobalCoarsening =
-  MGTransferMF<dim, typename VectorType::value_type>;
+using MGTransferGlobalCoarsening = MGTransferMF<dim,
+                                                typename VectorType::value_type,
+                                                ::dealii::MemorySpace::Host>;
 
 template <int dim, typename VectorType>
 using MGTransferBlockGlobalCoarsening =
   MGTransferBlockMF<dim, typename VectorType::value_type>;
 
 
+/** @} */
 
 #ifndef DOXYGEN
 
@@ -1445,9 +1439,9 @@ using MGTransferBlockGlobalCoarsening =
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <typename MGTwoLevelTransferObject>
-MGTransferMF<dim, Number>::MGTransferMF(
+MGTransferMF<dim, Number, MemorySpace>::MGTransferMF(
   const MGLevelObject<MGTwoLevelTransferObject> &transfer,
   const std::function<void(const unsigned int, VectorType &)>
     &initialize_dof_vector)
@@ -1461,10 +1455,10 @@ MGTransferMF<dim, Number>::MGTransferMF(
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <typename MGTwoLevelTransferObject>
 void
-MGTransferMF<dim, Number>::initialize_two_level_transfers(
+MGTransferMF<dim, Number, MemorySpace>::initialize_two_level_transfers(
   const MGLevelObject<MGTwoLevelTransferObject> &transfer)
 {
   this->initialize_transfer_references(transfer);
@@ -1472,10 +1466,10 @@ MGTransferMF<dim, Number>::initialize_two_level_transfers(
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <typename MGTwoLevelTransferObject>
 void
-MGTransferMF<dim, Number>::initialize_transfer_references(
+MGTransferMF<dim, Number, MemorySpace>::initialize_transfer_references(
   const MGLevelObject<MGTwoLevelTransferObject> &transfer)
 {
   const unsigned int min_level = transfer.min_level();
@@ -1483,7 +1477,8 @@ MGTransferMF<dim, Number>::initialize_transfer_references(
 
   this->transfer.resize(min_level, max_level);
 
-  for (unsigned int l = min_level; l <= max_level; ++l)
+  // Note that transfer[min_level] is empty and never used:
+  for (unsigned int l = min_level + 1; l <= max_level; ++l)
     this->transfer[l] = &const_cast<MGTwoLevelTransferBase<VectorType> &>(
       static_cast<const MGTwoLevelTransferBase<VectorType> &>(
         Utilities::get_underlying_value(transfer[l])));
@@ -1491,10 +1486,10 @@ MGTransferMF<dim, Number>::initialize_transfer_references(
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <class InVector>
 void
-MGTransferMF<dim, Number>::initialize_dof_vector(
+MGTransferMF<dim, Number, MemorySpace>::initialize_dof_vector(
   const unsigned int level,
   VectorType        &vec,
   const InVector    &vec_reference,
@@ -1539,12 +1534,13 @@ MGTransferMF<dim, Number>::initialize_dof_vector(
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <class InVector>
 void
-MGTransferMF<dim, Number>::copy_to_mg(const DoFHandler<dim>     &dof_handler,
-                                      MGLevelObject<VectorType> &dst,
-                                      const InVector            &src) const
+MGTransferMF<dim, Number, MemorySpace>::copy_to_mg(
+  const DoFHandler<dim>     &dof_handler,
+  MGLevelObject<VectorType> &dst,
+  const InVector            &src) const
 {
   assert_dof_handler(dof_handler);
 
@@ -1597,10 +1593,10 @@ MGTransferMF<dim, Number>::copy_to_mg(const DoFHandler<dim>     &dof_handler,
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <class OutVector>
 void
-MGTransferMF<dim, Number>::copy_from_mg(
+MGTransferMF<dim, Number, MemorySpace>::copy_from_mg(
   const DoFHandler<dim>           &dof_handler,
   OutVector                       &dst,
   const MGLevelObject<VectorType> &src) const
@@ -1651,11 +1647,12 @@ MGTransferMF<dim, Number>::copy_from_mg(
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <class InVector>
 void
-MGTransferMF<dim, Number>::interpolate_to_mg(MGLevelObject<VectorType> &dst,
-                                             const InVector &src) const
+MGTransferMF<dim, Number, MemorySpace>::interpolate_to_mg(
+  MGLevelObject<VectorType> &dst,
+  const InVector            &src) const
 {
   DoFHandler<dim> dof_handler_dummy;
 
@@ -1664,12 +1661,13 @@ MGTransferMF<dim, Number>::interpolate_to_mg(MGLevelObject<VectorType> &dst,
 
 
 
-template <int dim, typename Number>
+template <int dim, typename Number, typename MemorySpace>
 template <class InVector>
 void
-MGTransferMF<dim, Number>::interpolate_to_mg(const DoFHandler<dim> &dof_handler,
-                                             MGLevelObject<VectorType> &dst,
-                                             const InVector &src) const
+MGTransferMF<dim, Number, MemorySpace>::interpolate_to_mg(
+  const DoFHandler<dim>     &dof_handler,
+  MGLevelObject<VectorType> &dst,
+  const InVector            &src) const
 {
   assert_dof_handler(dof_handler);
 

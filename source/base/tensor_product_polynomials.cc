@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2000 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/memory_consumption.h>
@@ -42,7 +41,7 @@ namespace internal
                          const unsigned int,
                          std::array<unsigned int, dim> &)
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
     }
 
     inline void
@@ -134,6 +133,48 @@ TensorProductPolynomials<0, Polynomials::Polynomial<double>>::output_indices(
 
 
 
+template <int dim>
+inline const std::vector<unsigned int> &
+AnisotropicPolynomials<dim>::get_numbering() const
+{
+  return index_map;
+}
+
+
+
+template <int dim>
+inline const std::vector<unsigned int> &
+AnisotropicPolynomials<dim>::get_numbering_inverse() const
+{
+  return index_map_inverse;
+}
+
+
+
+template <int dim>
+void
+AnisotropicPolynomials<dim>::set_numbering(
+  const std::vector<unsigned int> &renumber)
+{
+  Assert(renumber.size() == index_map.size(),
+         ExcDimensionMismatch(renumber.size(), index_map.size()));
+
+  index_map = renumber;
+  for (unsigned int i = 0; i < index_map.size(); ++i)
+    index_map_inverse[index_map[i]] = i;
+}
+
+
+
+template <>
+void
+AnisotropicPolynomials<0>::set_numbering(const std::vector<unsigned int> &)
+{
+  AssertThrow(false, ExcNotImplemented("This function does not work in 0-d!"));
+}
+
+
+
 template <int dim, typename PolynomialType>
 void
 TensorProductPolynomials<dim, PolynomialType>::set_numbering(
@@ -172,7 +213,7 @@ TensorProductPolynomials<dim, PolynomialType>::compute_value(
 
   double value = 1.;
   for (unsigned int d = 0; d < dim; ++d)
-    value *= polynomials[indices[d]].value(p(d));
+    value *= polynomials[indices[d]].value(p[d]);
 
   return value;
 }
@@ -210,7 +251,7 @@ TensorProductPolynomials<dim, PolynomialType>::compute_grad(
     std::vector<double> tmp(2);
     for (unsigned int d = 0; d < dim; ++d)
       {
-        polynomials[indices[d]].value(p(d), tmp);
+        polynomials[indices[d]].value(p[d], tmp);
         v[d][0] = tmp[0];
         v[d][1] = tmp[1];
       }
@@ -256,7 +297,7 @@ TensorProductPolynomials<dim, PolynomialType>::compute_grad_grad(
     std::vector<double> tmp(3);
     for (unsigned int d = 0; d < dim; ++d)
       {
-        polynomials[indices[d]].value(p(d), tmp);
+        polynomials[indices[d]].value(p[d], tmp);
         v[d][0] = tmp[0];
         v[d][1] = tmp[1];
         v[d][2] = tmp[2];
@@ -644,6 +685,8 @@ AnisotropicPolynomials<dim>::AnisotropicPolynomials(
   const std::vector<std::vector<Polynomials::Polynomial<double>>> &pols)
   : ScalarPolynomialsBase<dim>(1, get_n_tensor_pols(pols))
   , polynomials(pols)
+  , index_map(this->n())
+  , index_map_inverse(this->n())
 {
   Assert(pols.size() == dim, ExcDimensionMismatch(pols.size(), dim));
   for (const auto &pols_d : pols)
@@ -652,6 +695,14 @@ AnisotropicPolynomials<dim>::AnisotropicPolynomials(
       Assert(pols_d.size() > 0,
              ExcMessage("The number of polynomials must be larger than zero "
                         "for all coordinate directions."));
+    }
+
+  // per default set this index map to identity. This map can be changed by
+  // the user through the set_numbering() function
+  for (unsigned int i = 0; i < this->n(); ++i)
+    {
+      index_map[i]         = i;
+      index_map_inverse[i] = i;
     }
 }
 
@@ -674,12 +725,12 @@ AnisotropicPolynomials<dim>::compute_index(
     {
     }
   else if (dim == 1)
-    internal::compute_tensor_index(i,
+    internal::compute_tensor_index(index_map[i],
                                    polynomials[0].size(),
                                    0 /*not used*/,
                                    indices);
   else
-    internal::compute_tensor_index(i,
+    internal::compute_tensor_index(index_map[i],
                                    polynomials[0].size(),
                                    polynomials[1].size(),
                                    indices);
@@ -707,7 +758,7 @@ AnisotropicPolynomials<dim>::compute_value(const unsigned int i,
 
   double value = 1.;
   for (unsigned int d = 0; d < dim; ++d)
-    value *= polynomials[d][indices[d]].value(p(d));
+    value *= polynomials[d][indices[d]].value(p[d]);
 
   return value;
 }
@@ -740,7 +791,7 @@ AnisotropicPolynomials<dim>::compute_grad(const unsigned int i,
   // coordinate direction
   ndarray<double, dim, 2> v;
   for (unsigned int d = 0; d < dim; ++d)
-    polynomials[d][indices[d]].value(p(d), 1, v[d].data());
+    polynomials[d][indices[d]].value(p[d], 1, v[d].data());
 
   Tensor<1, dim> grad;
   for (unsigned int d = 0; d < dim; ++d)
@@ -777,7 +828,7 @@ AnisotropicPolynomials<dim>::compute_grad_grad(const unsigned int i,
 
   ndarray<double, dim, 3> v;
   for (unsigned int d = 0; d < dim; ++d)
-    polynomials[d][indices[d]].value(p(d), 2, v[d].data());
+    polynomials[d][indices[d]].value(p[d], 2, v[d].data());
 
   Tensor<2, dim> grad_grad;
   for (unsigned int d1 = 0; d1 < dim; ++d1)
@@ -895,7 +946,7 @@ AnisotropicPolynomials<dim>::evaluate(
     values_1d,
     polynomials[0].size(),
     indices,
-    {},
+    index_map_inverse,
     values,
     grads,
     grad_grads,

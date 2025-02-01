@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1998 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -57,21 +56,13 @@ namespace internal
   {
     std::string policy_name;
     if (dynamic_cast<const typename dealii::internal::DoFHandlerImplementation::
-                       Policy::Sequential<dim, spacedim> *>(&policy) ||
-        dynamic_cast<const typename dealii::internal::DoFHandlerImplementation::
                        Policy::Sequential<dim, spacedim> *>(&policy))
       policy_name = "Policy::Sequential<";
     else if (dynamic_cast<
                const typename dealii::internal::DoFHandlerImplementation::
-                 Policy::ParallelDistributed<dim, spacedim> *>(&policy) ||
-             dynamic_cast<
-               const typename dealii::internal::DoFHandlerImplementation::
                  Policy::ParallelDistributed<dim, spacedim> *>(&policy))
       policy_name = "Policy::ParallelDistributed<";
     else if (dynamic_cast<
-               const typename dealii::internal::DoFHandlerImplementation::
-                 Policy::ParallelShared<dim, spacedim> *>(&policy) ||
-             dynamic_cast<
                const typename dealii::internal::DoFHandlerImplementation::
                  Policy::ParallelShared<dim, spacedim> *>(&policy))
       policy_name = "Policy::ParallelShared<";
@@ -218,7 +209,7 @@ namespace internal
               break;
 
             default:
-              Assert(false, ExcNotImplemented());
+              DEAL_II_NOT_IMPLEMENTED();
               max_couplings = 0;
           }
         return std::min(max_couplings, dof_handler.n_dofs());
@@ -249,7 +240,7 @@ namespace internal
             27 * dof_handler.fe_collection.max_dofs_per_hex();
         else
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             max_couplings = 0;
           }
 
@@ -761,7 +752,7 @@ namespace internal
                        ++fe)
                     if (vertex_fe_association[fe][v] == true)
                       {
-                        fe_slots_needed++;
+                        ++fe_slots_needed;
                         vertex_slots_needed +=
                           dof_handler.get_fe(fe).n_dofs_per_vertex();
                       }
@@ -1202,7 +1193,7 @@ namespace internal
                          ++fe)
                       if (line_fe_association[fe][line] == true)
                         {
-                          fe_slots_needed++;
+                          ++fe_slots_needed;
                           line_slots_needed +=
                             dof_handler.get_fe(fe).n_dofs_per_line();
                         }
@@ -1301,7 +1292,7 @@ namespace internal
                     cell->active_fe_index();
 
               Utilities::MPI::sum(active_fe_indices,
-                                  tr->get_communicator(),
+                                  tr->get_mpi_communicator(),
                                   active_fe_indices);
 
               // now go back and fill the active FE index on all other
@@ -1402,7 +1393,7 @@ namespace internal
                     .hp_cell_future_fe_indices[cell->level()][cell->index()];
 
               Utilities::MPI::sum(future_fe_indices,
-                                  tr->get_communicator(),
+                                  tr->get_mpi_communicator(),
                                   future_fe_indices);
 
               for (const auto &cell : dof_handler.active_cell_iterators())
@@ -1659,7 +1650,7 @@ namespace internal
                   "You ask for information on children of this cell which is only "
                   "available for active cells. One of its children is not active."));
 
-              // Ghost siblings might occur on parallel::shared::Triangulation
+              // Ghost siblings might occur on parallel Triangulation
               // objects. The public interface does not allow to access future
               // FE indices on ghost cells. However, we need this information
               // here and thus call the internal function that does not check
@@ -2580,7 +2571,7 @@ unsigned int DoFHandler<dim, spacedim>::max_couplings_between_boundary_dofs()
                 28 * this->fe_collection.max_dofs_per_line() +
                 8 * this->fe_collection.max_dofs_per_quad());
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return 0;
     }
 }
@@ -2741,7 +2732,7 @@ void DoFHandler<dim, spacedim>::connect_to_triangulation_signals()
           [this]() { this->pre_distributed_transfer_action(); }));
       this->tria_listeners_for_transfer.push_back(
         this->tria->signals.post_distributed_repartition.connect(
-          [this] { this->post_distributed_transfer_action(); }));
+          [this]() { this->post_distributed_transfer_action(); }));
 
       // refinement signals
       this->tria_listeners_for_transfer.push_back(
@@ -2772,26 +2763,21 @@ void DoFHandler<dim, spacedim>::connect_to_triangulation_signals()
 
       // refinement signals
       this->tria_listeners_for_transfer.push_back(
-        this->tria->signals.pre_refinement.connect([this]() {
-          internal::hp::DoFHandlerImplementation::Implementation::
-            communicate_future_fe_indices(*this);
-        }));
-      this->tria_listeners_for_transfer.push_back(
         this->tria->signals.pre_refinement.connect(
-          [this] { this->pre_transfer_action(); }));
+          [this]() { this->pre_transfer_action(); }));
       this->tria_listeners_for_transfer.push_back(
         this->tria->signals.post_refinement.connect(
-          [this] { this->post_transfer_action(); }));
+          [this]() { this->post_transfer_action(); }));
     }
   else
     {
       // refinement signals
       this->tria_listeners_for_transfer.push_back(
         this->tria->signals.pre_refinement.connect(
-          [this] { this->pre_transfer_action(); }));
+          [this]() { this->pre_transfer_action(); }));
       this->tria_listeners_for_transfer.push_back(
         this->tria->signals.post_refinement.connect(
-          [this] { this->post_transfer_action(); }));
+          [this]() { this->post_transfer_action(); }));
     }
 }
 
@@ -2894,6 +2880,9 @@ void DoFHandler<dim, spacedim>::pre_transfer_action()
 
   this->active_fe_index_transfer = std::make_unique<ActiveFEIndexTransfer>();
 
+  internal::hp::DoFHandlerImplementation::Implementation::
+    communicate_future_fe_indices(*this);
+
   dealii::internal::hp::DoFHandlerImplementation::Implementation::
     collect_fe_indices_on_cells_to_be_refined(*this);
 }
@@ -2931,10 +2920,18 @@ void DoFHandler<dim, spacedim>::pre_distributed_transfer_action()
   active_fe_index_transfer->active_fe_indices.resize(
     get_triangulation().n_active_cells(), numbers::invalid_fe_index);
 
+  // Collect future FE indices on locally owned and ghost cells.
+  // The public interface does not allow to access future FE indices
+  // on ghost cells. However, we need this information here and thus
+  // call the internal function that does not check for cell ownership.
+  internal::hp::DoFHandlerImplementation::Implementation::
+    communicate_future_fe_indices(*this);
+
   for (const auto &cell : active_cell_iterators())
-    if (cell->is_locally_owned())
+    if (cell->is_artificial() == false)
       active_fe_index_transfer->active_fe_indices[cell->active_cell_index()] =
-        cell->future_fe_index();
+        dealii::internal::DoFCellAccessorImplementation::Implementation::
+          future_fe_index<dim, spacedim, false>(*cell);
 
   // Create transfer object and attach to it.
   const auto *distributed_tria =
@@ -2995,7 +2992,7 @@ DEAL_II_CXX20_REQUIRES((concepts::is_valid_dim_spacedim<dim, spacedim>))
 void DoFHandler<dim, spacedim>::post_distributed_transfer_action()
 {
 #  ifndef DEAL_II_WITH_P4EST
-  Assert(false, ExcInternalError());
+  DEAL_II_ASSERT_UNREACHABLE();
 #  else
   update_active_fe_table();
 

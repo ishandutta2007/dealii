@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 1999 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_grid_in_h
 #define dealii_grid_in_h
@@ -20,10 +19,13 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/exceptions.h>
+#include <deal.II/base/observer_pointer.h>
 #include <deal.II/base/point.h>
-#include <deal.II/base/smartpointer.h>
+
+#include <deal.II/lac/vector.h>
 
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -305,7 +307,6 @@ struct CellData;
  *
  * @ingroup grid
  * @ingroup input
- * Pelteret 2015, Timo Heister 2015,  Krzysztof Bzowski, 2015
  */
 
 template <int dim, int spacedim = dim>
@@ -368,9 +369,8 @@ public:
   read(std::istream &in, Format format = Default);
 
   /**
-   * Open the file given by the string and call the previous function read().
-   * This function uses the PathSearch mechanism to find files. The file class
-   * used is <code>MESH</code>.
+   * Open the file given by the string and call the previous function
+   * read() taking a std::istream argument.
    */
   void
   read(const std::string &in, Format format = Default);
@@ -771,6 +771,25 @@ public:
   get_format_names();
 
   /**
+   * Return a map containing cell data associated with the elements of an
+   * external vtk format mesh imported using read_vtk().
+   * The format of the returned map is as
+   * follows:
+   * - std::string stores the name of the field data (identifier) as specified
+   * in the external mesh
+   * - Vector<double> stores value for the given identifier in each cell.
+   * To access the value, use cell_data[name_field][cell->active_cell_index()].
+   *
+   * For example, if the vtk mesh contains field data "Density" defined on
+   * cells, then `cell_data["Density"][0]` provides the density defined at cell
+   * ID '0', which corresponds to index 0 of the vector. The length of the
+   * vector in `cell_data["Density"]` equals the number of elements in the
+   * coarse mesh.
+   */
+  const std::map<std::string, Vector<double>> &
+  get_cell_data() const;
+
+  /**
    * Exception
    */
   DeclException1(ExcUnknownSectionType,
@@ -862,9 +881,11 @@ public:
                  << "Supported elements are: \n"
                  << "ELM-TYPE\n"
                  << "1 Line (2 nodes, 1 edge).\n"
+                 << "2 Triangle (3 nodes, 3 edges).\n"
                  << "3 Quadrilateral (4 nodes, 4 edges).\n"
+                 << "4 Tetrahedron (4 nodes, 6 edges, 4 faces) when in 3d.\n"
                  << "5 Hexahedron (8 nodes, 12 edges, 6 faces) when in 3d.\n"
-                 << "15 Point (1 node, ignored when read)");
+                 << "15 Point (1 node, ignored when read).");
 
 
   DeclException2(
@@ -883,7 +904,7 @@ protected:
   /**
    * Store address of the triangulation to be fed with the data read in.
    */
-  SmartPointer<Triangulation<dim, spacedim>, GridIn<dim, spacedim>> tria;
+  ObserverPointer<Triangulation<dim, spacedim>, GridIn<dim, spacedim>> tria;
 
   /**
    * This function can write the raw cell data objects created by the
@@ -949,6 +970,17 @@ private:
    * Input format used by read() if no format is given.
    */
   Format default_format;
+
+  /**
+   * Data member that stores field data defined at the cells of the mesh.
+   * The format is as follows:
+   * - std::string stores the name of the field data (identifier) as specified
+   * in the external mesh
+   * - Vector<double> stores value for the given identifier in each cell id.
+   *
+   * To access the value use cell_data[name_field][cell->active_cell_index()].
+   */
+  std::map<std::string, Vector<double>> cell_data;
 };
 
 /* -------------- declaration of explicit specializations ------------- */

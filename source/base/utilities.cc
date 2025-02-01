@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2005 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -876,7 +875,7 @@ namespace Utilities
           return std::make_pair(i, 7U);
         else
           {
-            Assert(false, ExcNotImplemented());
+            DEAL_II_NOT_IMPLEMENTED();
             return std::make_pair(-1, numbers::invalid_unsigned_int);
           }
       }
@@ -1013,8 +1012,8 @@ namespace Utilities
     std::string
     get_time()
     {
-      std::time_t time1 = std::time(nullptr);
-      std::tm    *time  = std::localtime(&time1);
+      std::time_t    time1 = std::time(nullptr);
+      const std::tm *time  = std::localtime(&time1);
 
       std::ostringstream o;
       o << time->tm_hour << ":" << (time->tm_min < 10 ? "0" : "")
@@ -1029,8 +1028,8 @@ namespace Utilities
     std::string
     get_date()
     {
-      std::time_t time1 = std::time(nullptr);
-      std::tm    *time  = std::localtime(&time1);
+      std::time_t    time1 = std::time(nullptr);
+      const std::tm *time  = std::localtime(&time1);
 
       std::ostringstream o;
       o << time->tm_year + 1900 << "/" << time->tm_mon + 1 << "/"
@@ -1044,18 +1043,29 @@ namespace Utilities
     void
     posix_memalign(void **memptr, std::size_t alignment, std::size_t size)
     {
+      // Strictly speaking, one can call both posix_memalign() and malloc()
+      // with size==0. This is documented as returning a pointer that can
+      // be given to free(), but for which using it is otherwise undefined.
+      // That just seems like a bad idea -- let's just return a nullptr to
+      // *ensure* that it can not be used. free() is documented as accepting
+      // a nullptr, in which it simply does nothing.
+      if (size > 0)
+        {
 #ifndef DEAL_II_MSVC
-      const int ierr = ::posix_memalign(memptr, alignment, size);
+          const int ierr = ::posix_memalign(memptr, alignment, size);
 
-      AssertThrow(ierr == 0, ExcOutOfMemory(size));
-      AssertThrow(*memptr != nullptr, ExcOutOfMemory(size));
+          AssertThrow(ierr == 0, ExcOutOfMemory(size));
+          AssertThrow(*memptr != nullptr, ExcOutOfMemory(size));
 #else
-      // Windows does not appear to have posix_memalign. just use the
-      // regular malloc in that case
-      *memptr = malloc(size);
-      (void)alignment;
-      AssertThrow(*memptr != 0, ExcOutOfMemory(size));
+          // Windows does not appear to have posix_memalign. just use the
+          // regular malloc in that case
+          *memptr = malloc(size);
+          (void)alignment;
+          AssertThrow(*memptr != nullptr, ExcOutOfMemory(size));
 #endif
+        }
+      else
+        *memptr = nullptr;
     }
 
 

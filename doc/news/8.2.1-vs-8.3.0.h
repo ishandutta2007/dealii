@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2015 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2014 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 /**
  * @page changes_between_8_2_1_and_8_3 Changes between Version 8.2.1 and 8.3
@@ -753,7 +752,7 @@ inconvenience this causes.
 
   <li> New: The VectorTools::integrate_difference() function can now
   also compute the $H_\text{div}$ seminorm, using the
-  VectorTools::NormType::Hdiv_seminorm argument.
+  VectorTools::Hdiv_seminorm argument.
   <br>
   (Zhen Tao, Arezou Ghesmati, Wolfgang Bangerth, 2015/04/17)
   </li>
@@ -1033,7 +1032,7 @@ inconvenience this causes.
   </li>
 
   <li> New: A new macro <code>DEAL_II_QUERY_GIT_INFORMATION</code> is
-  provided to query user projects for git repository information simmilarly
+  provided to query user projects for git repository information similarly
   to those exported by deal.II.
   <br>
   (Matthias Maier, 2015/01/21)

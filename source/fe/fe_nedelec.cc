@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2013 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/logstream.h>
 #include <deal.II/base/qprojector.h>
@@ -203,7 +202,7 @@ FE_Nedelec<dim>::FE_Nedelec(const unsigned int order)
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 
   // We need to initialize the dof permutation table and the one for the sign
@@ -216,11 +215,361 @@ template <int dim>
 void
 FE_Nedelec<dim>::initialize_quad_dof_index_permutation_and_sign_change()
 {
-  // for 1d and 2d, do nothing
-  if (dim < 3)
+  // The order of the Nedelec elements equals the tensor degree minus one,
+  // k = n - 1. In the three-dimensional space the Nedelec elements of the
+  // lowermost order, k = 0, have only 12 line (edge) dofs. The Nedelec
+  // elements of the higher orders, k > 0, have 3*(k+1)*(k+2)^2 dofs in
+  // total if dim=3. The dofs in a cell are distributed between lines
+  // (edges), quads (faces), and the hex (the interior of the cell) as the
+  // following:
+  //
+  // 12*(k+1) line dofs; (k+1) dofs per line.
+  // 2*6*k*(k+1) quad dofs; 2*k*(k+1) dofs per quad.
+  // 3*(k+2)^2*(k+1) hex dofs;
+  //
+  // The dofs are indexed in the following order: first all line dofs,
+  // then all quad dofs, and then all hex dofs.
+  //
+  // The line dofs need only sign adjustments. No permutation of line
+  // dofs is needed. The line dofs are treated by
+  // internal::FE_PolyTensor::get_dof_sign_change_nedelec(...)
+  // in fe_poly_tensor.cc.
+  //
+  // The hex dofs need no adjustments: they are not shared between
+  // neighbouring mesh cells.
+  //
+  // The two-dimensional Nedelec finite elements share no quad dofs between
+  // neighbouring mesh cells. The zero-order three-dimensional Nedelec
+  // finite elements have no quad dofs. Consequently, here we treat only
+  // quad dofs of the three-dimensional Nedelec finite elements of the
+  // higher orders, k>0. The questions how the curl looks like in the
+  // higher-dimensional spaces and what does it mean to be curl-conforming
+  // if dim>3 we leave unanswered.
+  //
+  // In this function we need to change some entries in the following two
+  // vectors of tables:
+  // adjust_quad_dof_index_for_face_orientation_table
+  // and
+  // adjust_quad_dof_sign_for_face_orientation_table.
+  // These tables specify the permutations and sign adjustments of the quad
+  // dofs only. The tables are already filled with zeros meaning no
+  // permutations or sign change are required. We need to change some
+  // entries of the tables such that the shape functions that correspond to
+  // the quad dofs and are shared between neighbouring cells have consistent
+  // orientations.
+  //
+  // The swap tables below describe the dof permutations and sign changes
+  // that need to be done. The function
+  // FE_Nedelec<dim>::initialize_quad_dof_index_permutation_and_sign_change()
+  // simply reads the information in the swap tables below and puts it into
+  // tables
+  // adjust_quad_dof_index_for_face_orientation_table
+  // and
+  // adjust_quad_dof_sign_for_face_orientation_table.
+  // A good question is: why don't we put the information into the tables of
+  // deal.II right away? The answer is the following. The information on the
+  // necessary dof permutations and sign changes is derived by plotting the
+  // shape functions and observing them on faces of different orientations.
+  // It is convenient to put the observations first in the format of the
+  // swap tables below and then convert the swap tables into the format used
+  // by deal.II.
+  //
+  // The dofs on a quad are indexed as the following:
+  //
+  // | x0, x1, x2, x3, ..., xk  | y0, y1, y2, y3 ..., yk  |
+  // |                          |                         |
+  // |<------ k*(k+1) --------->|<------ k*(k+1) -------->|
+  // |                                                    |
+  // |<------------------- 2*k*(k+1) -------------------->|
+  //
+  // Only one type of dof permutation is needed: swap between two dofs; one
+  // dof being xi, another yj. That is, if x4 is replaced with y7,
+  // then y7 must be replaced with x4. Such swaps can be ordered as
+  // illustrated by the following example:
+  //
+  //                *
+  //        y0, y9, y1, y2, ..., yk
+  //      ---------------------------                     (swap)
+  //        x0, x1, x2, x3, ..., xk
+  //        *
+  //
+  // An x-dof below the line is swapped with the corresponding y-dof above
+  // the line. A dof marked by the asterisk must change its sign before the
+  // swap.
+  //
+  // The x-dofs are assumed to have the normal order. There is no need to
+  // encode it. Therefore, the swap tables need to encode the following
+  // information: indices of the y-dofs, the sign change of the x-dofs, and
+  // sign change of the y-dofs. The swap above is encoded as the following:
+  //
+  // swap = { 0, 9, 1, 2, ...., yk,  // indices of the y-dofs
+  //          1, 0, 0, 0, ...., 0,   // sign change of the x-dofs,
+  //          0, 1, 0, 0, ...., 0};  // sign change of the y-dofs.
+  //
+  // If no swap is needed, -1 is placed instead of the y-dof index.
+  //
+  // Such swaps are assembled into the swap table:
+  //
+  // swap_table = {swap_0, swap_1, ... swap_7};
+  //
+  // Each swap table contains eight swaps - one swap for each possible quad
+  // orientation. The deal.II encodes the orientation of a quad using
+  // three boolean parameters:
+  // face_orientation - true if face is in standard orientation
+  // and false otherwise;
+  // face_rotation - rotation by 90 deg counterclockwise if true;
+  // face_flip - rotation by 180 deg counterclockwise if true.
+  // See the documentation of GeometryInfo<dim>.
+  //
+  // The combined face orientation is computes as
+  // orientation_no = face_flip*4 + face_rotation*2 + face_orientation*1;
+  // See tria_orientation.h.
+  //
+  // The parameter orientation_no (0...7) indexes the swaps in a swap table.
+  //
+  // Nedelec elements of order k have their own swap table, swap_table_k.
+  // Recall, the swap_table_0 is empty as the Nedelec finite elements of the
+  // lowermost order have no quad dofs.
+
+  static const int c_swap_table_0 = 0;
+
+  static const int c_swap_table_1[8][3][2] = {         // 0   1
+                                              {{0, 1}, // 0
+                                               {0, 0},
+                                               {0, 0}},
+                                              {{-1, -1}, // 1
+                                               {0, 0},
+                                               {0, 0}},
+                                              {{-1, -1}, // 2
+                                               {0, 0},
+                                               {1, 0}},
+                                              {{0, 1}, // 3
+                                               {1, 0},
+                                               {0, 0}},
+                                              {{0, 1}, // 4
+                                               {1, 0},
+                                               {1, 0}},
+                                              {{-1, -1}, // 5
+                                               {1, 0},
+                                               {1, 0}},
+                                              {{-1, -1}, // 6
+                                               {1, 0},
+                                               {0, 0}},
+                                              {{0, 1}, // 7
+                                               {0, 0},
+                                               {1, 0}}};
+
+  static const int c_swap_table_2[8][3][6] = {// 0   1   2   3   4   5
+                                              {{0, 3, 1, 4, 2, 5}, // 0
+                                               {0, 0, 0, 0, 0, 0},
+                                               {0, 0, 0, 0, 0, 0}},
+                                              {{-1, -1, -1, -1, -1, -1}, // 1
+                                               {0, 0, 0, 0, 0, 0},
+                                               {0, 0, 0, 0, 0, 0}},
+                                              {{-1, -1, -1, -1, -1, -1}, // 2
+                                               {0, 1, 0, 1, 0, 1},
+                                               {1, 0, 1, 1, 0, 1}},
+                                              {{0, 3, 1, 4, 2, 5}, // 3
+                                               {1, 1, 0, 0, 1, 1},
+                                               {0, 0, 0, 1, 1, 1}},
+                                              {{0, 3, 1, 4, 2, 5}, // 4
+                                               {1, 0, 0, 1, 1, 0},
+                                               {1, 0, 1, 0, 1, 0}},
+                                              {{-1, -1, -1, -1, -1, -1}, // 5
+                                               {1, 0, 0, 1, 1, 0},
+                                               {1, 0, 1, 0, 1, 0}},
+                                              {{-1, -1, -1, -1, -1, -1}, // 6
+                                               {1, 1, 0, 0, 1, 1},
+                                               {0, 0, 0, 1, 1, 1}},
+                                              {{0, 3, 1, 4, 2, 5}, // 7
+                                               {0, 1, 0, 1, 0, 1},
+                                               {1, 0, 1, 1, 0, 1}}};
+
+  static const int c_swap_table_3[8][3][12] = {
+    // 0   1   2   3   4   5   6   7   8   9  10  11
+    {{0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11}, // 0
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 1
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 2
+     {0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0},
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}},
+    {{0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11}, // 3
+     {1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0},
+     {0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0}},
+    {{0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11}, // 4
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 5
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 6
+     {1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0},
+     {0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0}},
+    {{0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11}, // 7
+     {0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0},
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0}}};
+
+  static const int c_swap_table_4[8][3][20] = {
+    // Swap sign_X and sign_Y rows if k=4. Why?...
+    // 0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15  16  17  18
+    // 19
+    {{0,  5,  10, 15, 1,  6,  11, 16, 2,  7,
+      12, 17, 3,  8,  13, 18, 4,  9,  14, 19}, // 0
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 1
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 2
+     {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1},
+     {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}},
+    {{0,  5,  10, 15, 1,  6,  11, 16, 2,  7,
+      12, 17, 3,  8,  13, 18, 4,  9,  14, 19}, // 3
+     {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1},
+     {1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1}},
+    {{0,  5,  10, 15, 1,  6,  11, 16, 2,  7,
+      12, 17, 3,  8,  13, 18, 4,  9,  14, 19}, // 4
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 5
+     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0},
+     {1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0}},
+    {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}, // 6
+     {0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1},
+     {1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1}},
+    {{0,  5,  10, 15, 1,  6,  11, 16, 2,  7,
+      12, 17, 3,  8,  13, 18, 4,  9,  14, 19}, // 7
+     {1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1},
+     {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1}}};
+
+  static const int *swap_table_array[5] = {&c_swap_table_0,
+                                           &c_swap_table_1[0][0][0],
+                                           &c_swap_table_2[0][0][0],
+                                           &c_swap_table_3[0][0][0],
+                                           &c_swap_table_4[0][0][0]};
+
+  static const int row_length[5] = {0, 2, 6, 12, 20};
+  static const int table_size[5] = {
+    0, 8 * 3 * 2, 8 * 3 * 6, 8 * 3 * 12, 8 * 3 * 20};
+
+  // Only three-dimensional Nedelec finite elements are treated. The
+  // two-dimensional Nedelec finite elements only need sign adjustments of the
+  // line dofs. These adjustments are done by
+  // internal::FE_PolyTensor::get_dof_sign_change_nedelec(...)
+  // in fe_poly_tensor.cc. The notions of curl and curl-conforming finite
+  // elements in higher-dimensional spaces, dim >3, are somewhat unclear as
+  // curl, strictly peaking, exists only in the three-dimensional space.
+  if (dim != 3)
     return;
 
-  // TODO: Implement this for this class
+  const unsigned int k = this->tensor_degree() - 1;
+
+  // The Nedelec finite elements of the lowermost order have no quad dofs.
+  if (k == 0)
+    return;
+
+  // The finite element orders > 4 are not implemented.
+  AssertThrow(k < 5, ExcNotImplemented());
+
+  // TODO: the implementation makes the assumption that all quads have the
+  // same number of dofs
+  AssertDimension(this->n_unique_faces(), 1);
+  const unsigned int face_no = 0;
+
+  Assert(
+    this->adjust_quad_dof_index_for_face_orientation_table[0].n_elements() ==
+      this->reference_cell().n_face_orientations(face_no) *
+        this->n_dofs_per_quad(face_no),
+    ExcInternalError());
+
+  Assert(
+    this->adjust_quad_dof_sign_for_face_orientation_table[0].n_elements() ==
+      this->reference_cell().n_face_orientations(face_no) *
+        this->n_dofs_per_quad(face_no),
+    ExcInternalError());
+
+  // The 3D Nedelec finite elements have 2*k*(k+1) dofs per each quad.
+  Assert(2 * k * (k + 1) == this->n_dofs_per_quad(face_no), ExcInternalError());
+
+  const int *swap_table = swap_table_array[k];
+
+  const unsigned int half_dofs = k * (k + 1); // see below;
+
+  const int rl = row_length[k];
+
+  int offset = table_size[0];
+  // The assignment above is to prevent the compiler from complaining about the
+  // unused table_size.
+
+  int value = 0;
+
+  for (const bool face_orientation : {false, true})
+    for (const bool face_rotation : {false, true})
+      for (const bool face_flip : {false, true})
+        {
+          const auto case_no =
+            internal::combined_face_orientation(face_orientation,
+                                                face_rotation,
+                                                face_flip);
+
+          // The dofs on a quad are indexed as the following:
+          //
+          // | x0, x1, x2, x3, ..., xk  | y0, y1, y2, y3 ..., yk  |
+          // |                          |                         |
+          // |-- half_ dofs = k*(k+1) --|-- half_dofs = k*(k+1) --|
+          // |                                                    |
+          // |-------------------- 2*k*(k+1) ---------------------|
+
+          for (unsigned int indx_x = 0; indx_x < half_dofs; indx_x++)
+            {
+              offset = 3 * rl * case_no + 0 * rl + indx_x;
+              Assert(offset < table_size[k], ExcInternalError());
+              value = *(swap_table + offset);
+              Assert(value < table_size[k], ExcInternalError());
+              Assert(value > -2, ExcInternalError());
+
+              if (value != -1)
+                {
+                  const unsigned int indx_y =
+                    half_dofs + static_cast<unsigned int>(value);
+
+                  // dofs swap
+                  this
+                    ->adjust_quad_dof_index_for_face_orientation_table[face_no](
+                      indx_x, case_no) = indx_y - indx_x;
+
+                  this
+                    ->adjust_quad_dof_index_for_face_orientation_table[face_no](
+                      indx_y, case_no) = indx_x - indx_y;
+                }
+
+              // dof sign change
+              offset = 3 * rl * case_no + 1 * rl + indx_x;
+              Assert(offset < table_size[k], ExcInternalError());
+              value = *(swap_table + offset);
+              Assert((value == 0) || (value == 1), ExcInternalError());
+
+              this->adjust_quad_dof_sign_for_face_orientation_table[face_no](
+                indx_x, case_no) = static_cast<bool>(value);
+
+
+              offset = 3 * rl * case_no + 2 * rl + indx_x;
+              Assert(offset < table_size[k], ExcInternalError());
+              value = *(swap_table + offset);
+              Assert((value == 0) || (value == 1), ExcInternalError());
+
+              this->adjust_quad_dof_sign_for_face_orientation_table[face_no](
+                indx_x + half_dofs, case_no) = static_cast<bool>(value);
+            }
+        }
+
   return;
 }
 
@@ -266,7 +615,7 @@ template <>
 void
 FE_Nedelec<1>::initialize_support_points(const unsigned int)
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -325,20 +674,18 @@ FE_Nedelec<2>::initialize_support_points(const unsigned int order)
           for (unsigned int line = 0; line < GeometryInfo<dim>::lines_per_cell;
                ++line)
             this->generalized_support_points[line * n_edge_points + q_point] =
-              edge_quadrature.point(
-                QProjector<dim>::DataSetDescriptor::face(this->reference_cell(),
-                                                         line,
-                                                         true,
-                                                         false,
-                                                         false,
-                                                         n_edge_points) +
-                q_point);
+              edge_quadrature.point(QProjector<dim>::DataSetDescriptor::face(
+                                      this->reference_cell(),
+                                      line,
+                                      numbers::default_geometric_orientation,
+                                      n_edge_points) +
+                                    q_point);
 
           for (unsigned int i = 0; i < order; ++i)
             boundary_weights(q_point, i) =
               reference_edge_quadrature.weight(q_point) *
               lobatto_polynomials_grad[i + 1].value(
-                this->generalized_face_support_points[face_no][q_point](0));
+                this->generalized_face_support_points[face_no][q_point][0]);
         }
 
       for (unsigned int q_point = 0; q_point < n_interior_points; ++q_point)
@@ -356,14 +703,12 @@ FE_Nedelec<2>::initialize_support_points(const unsigned int order)
            ++line)
         for (unsigned int q_point = 0; q_point < n_edge_points; ++q_point)
           this->generalized_support_points[line * n_edge_points + q_point] =
-            edge_quadrature.point(
-              QProjector<dim>::DataSetDescriptor::face(this->reference_cell(),
-                                                       line,
-                                                       true,
-                                                       false,
-                                                       false,
-                                                       n_edge_points) +
-              q_point);
+            edge_quadrature.point(QProjector<dim>::DataSetDescriptor::face(
+                                    this->reference_cell(),
+                                    line,
+                                    numbers::default_geometric_orientation,
+                                    n_edge_points) +
+                                  q_point);
     }
 }
 
@@ -430,9 +775,7 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
                 QProjector<dim - 1>::DataSetDescriptor::face(
                   ReferenceCells::get_hypercube<dim - 1>(),
                   line,
-                  true,
-                  false,
-                  false,
+                  numbers::default_geometric_orientation,
                   n_edge_points) +
                 q_point);
 
@@ -441,20 +784,20 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
               {
                 this->generalized_support_points[q_point +
                                                  (i + 4 * j) * n_edge_points] =
-                  Point<dim>(i, reference_edge_quadrature.point(q_point)(0), j);
+                  Point<dim>(i, reference_edge_quadrature.point(q_point)[0], j);
                 this->generalized_support_points[q_point + (i + 4 * j + 2) *
                                                              n_edge_points] =
-                  Point<dim>(reference_edge_quadrature.point(q_point)(0), i, j);
+                  Point<dim>(reference_edge_quadrature.point(q_point)[0], i, j);
                 this->generalized_support_points[q_point + (i + 2 * (j + 4)) *
                                                              n_edge_points] =
-                  Point<dim>(i, j, reference_edge_quadrature.point(q_point)(0));
+                  Point<dim>(i, j, reference_edge_quadrature.point(q_point)[0]);
               }
 
           for (unsigned int i = 0; i < order; ++i)
             boundary_weights(q_point, i) =
               reference_edge_quadrature.weight(q_point) *
               lobatto_polynomials_grad[i + 1].value(
-                this->generalized_face_support_points[face_no][q_point](1));
+                this->generalized_face_support_points[face_no][q_point][1]);
         }
 
       // Create support points on faces.
@@ -471,19 +814,19 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
                   reference_face_quadrature.weight(q_point) *
                   lobatto_polynomials_grad[i].value(
                     this->generalized_face_support_points
-                      [face_no][q_point + 4 * n_edge_points](0)) *
+                      [face_no][q_point + 4 * n_edge_points][0]) *
                   lobatto_polynomials[j + 2].value(
                     this->generalized_face_support_points
-                      [face_no][q_point + 4 * n_edge_points](1));
+                      [face_no][q_point + 4 * n_edge_points][1]);
                 boundary_weights(q_point + n_edge_points,
                                  2 * (i * order + j) + 1) =
                   reference_face_quadrature.weight(q_point) *
                   lobatto_polynomials_grad[i].value(
                     this->generalized_face_support_points
-                      [face_no][q_point + 4 * n_edge_points](1)) *
+                      [face_no][q_point + 4 * n_edge_points][1]) *
                   lobatto_polynomials[j + 2].value(
                     this->generalized_face_support_points
-                      [face_no][q_point + 4 * n_edge_points](0));
+                      [face_no][q_point + 4 * n_edge_points][0]);
               }
         }
 
@@ -497,14 +840,12 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
             this->generalized_support_points[face * n_face_points + q_point +
                                              GeometryInfo<dim>::lines_per_cell *
                                                n_edge_points] =
-              face_quadrature.point(
-                QProjector<dim>::DataSetDescriptor::face(this->reference_cell(),
-                                                         face,
-                                                         true,
-                                                         false,
-                                                         false,
-                                                         n_face_points) +
-                q_point);
+              face_quadrature.point(QProjector<dim>::DataSetDescriptor::face(
+                                      this->reference_cell(),
+                                      face,
+                                      numbers::default_geometric_orientation,
+                                      n_face_points) +
+                                    q_point);
           }
 
       // Create support points in the interior.
@@ -531,9 +872,7 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
                 QProjector<dim - 1>::DataSetDescriptor::face(
                   ReferenceCells::get_hypercube<dim - 1>(),
                   line,
-                  true,
-                  false,
-                  false,
+                  numbers::default_geometric_orientation,
                   n_edge_points) +
                 q_point);
 
@@ -542,13 +881,13 @@ FE_Nedelec<3>::initialize_support_points(const unsigned int order)
               {
                 this->generalized_support_points[q_point +
                                                  (i + 4 * j) * n_edge_points] =
-                  Point<dim>(i, reference_edge_quadrature.point(q_point)(0), j);
+                  Point<dim>(i, reference_edge_quadrature.point(q_point)[0], j);
                 this->generalized_support_points[q_point + (i + 4 * j + 2) *
                                                              n_edge_points] =
-                  Point<dim>(reference_edge_quadrature.point(q_point)(0), i, j);
+                  Point<dim>(reference_edge_quadrature.point(q_point)[0], i, j);
                 this->generalized_support_points[q_point + (i + 2 * (j + 4)) *
                                                              n_edge_points] =
-                  Point<dim>(i, j, reference_edge_quadrature.point(q_point)(0));
+                  Point<dim>(i, j, reference_edge_quadrature.point(q_point)[0]);
               }
         }
     }
@@ -600,24 +939,24 @@ FE_Nedelec<dim>::initialize_restriction()
               {
                 const double weight = 2.0 * edge_quadrature.weight(q_point);
 
-                if (edge_quadrature_points[q_point](0) < 0.5)
+                if (edge_quadrature_points[q_point][0] < 0.5)
                   {
                     Point<dim> quadrature_point(
-                      0.0, 2.0 * edge_quadrature_points[q_point](0));
+                      0.0, 2.0 * edge_quadrature_points[q_point][0]);
 
                     this->restriction[index][0](0, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 1);
-                    quadrature_point(0) = 1.0;
+                    quadrature_point[0] = 1.0;
                     this->restriction[index][1](this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 1);
-                    quadrature_point(0) = quadrature_point(1);
-                    quadrature_point(1) = 0.0;
+                    quadrature_point[0] = quadrature_point[1];
+                    quadrature_point[1] = 0.0;
                     this->restriction[index][0](2 * this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 0);
-                    quadrature_point(1) = 1.0;
+                    quadrature_point[1] = 1.0;
                     this->restriction[index][2](3 * this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 0);
@@ -626,21 +965,21 @@ FE_Nedelec<dim>::initialize_restriction()
                 else
                   {
                     Point<dim> quadrature_point(
-                      0.0, 2.0 * edge_quadrature_points[q_point](0) - 1.0);
+                      0.0, 2.0 * edge_quadrature_points[q_point][0] - 1.0);
 
                     this->restriction[index][2](0, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 1);
-                    quadrature_point(0) = 1.0;
+                    quadrature_point[0] = 1.0;
                     this->restriction[index][3](this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 1);
-                    quadrature_point(0) = quadrature_point(1);
-                    quadrature_point(1) = 0.0;
+                    quadrature_point[0] = quadrature_point[1];
+                    quadrature_point[1] = 0.0;
                     this->restriction[index][1](2 * this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 0);
-                    quadrature_point(1) = 1.0;
+                    quadrature_point[1] = 1.0;
                     this->restriction[index][3](3 * this->degree, dof) +=
                       weight *
                       this->shape_value_component(dof, quadrature_point, 0);
@@ -673,7 +1012,7 @@ FE_Nedelec<dim>::initialize_restriction()
                     for (unsigned int i = 0; i < deg; ++i)
                       assembling_matrix(i, q_point) =
                         weight * legendre_polynomials[i + 1].value(
-                                   edge_quadrature_points[q_point](0));
+                                   edge_quadrature_points[q_point][0]);
                   }
 
                 FullMatrix<double> system_matrix(deg, deg);
@@ -697,14 +1036,14 @@ FE_Nedelec<dim>::initialize_restriction()
                       {
                         const double weight = edge_quadrature.weight(q_point);
                         const Point<dim> quadrature_point_0(
-                          i, edge_quadrature_points[q_point](0));
+                          i, edge_quadrature_points[q_point][0]);
                         const Point<dim> quadrature_point_1(
-                          edge_quadrature_points[q_point](0), i);
+                          edge_quadrature_points[q_point][0], i);
 
-                        if (edge_quadrature_points[q_point](0) < 0.5)
+                        if (edge_quadrature_points[q_point][0] < 0.5)
                           {
                             Point<dim> quadrature_point_2(
-                              i, 2.0 * edge_quadrature_points[q_point](0));
+                              i, 2.0 * edge_quadrature_points[q_point][0]);
 
                             tmp(0) =
                               weight *
@@ -723,7 +1062,7 @@ FE_Nedelec<dim>::initialize_restriction()
                                                           quadrature_point_0,
                                                           1);
                             quadrature_point_2 = Point<dim>(
-                              2.0 * edge_quadrature_points[q_point](0), i);
+                              2.0 * edge_quadrature_points[q_point][0], i);
                             tmp(2) =
                               weight *
                               (2.0 * this->shape_value_component(
@@ -755,7 +1094,7 @@ FE_Nedelec<dim>::initialize_restriction()
 
                             Point<dim> quadrature_point_2(
                               i,
-                              2.0 * edge_quadrature_points[q_point](0) - 1.0);
+                              2.0 * edge_quadrature_points[q_point][0] - 1.0);
 
                             tmp(1) =
                               weight *
@@ -774,7 +1113,7 @@ FE_Nedelec<dim>::initialize_restriction()
                               this->shape_value_component(
                                 (i + 2) * this->degree, quadrature_point_1, 0);
                             quadrature_point_2 = Point<dim>(
-                              2.0 * edge_quadrature_points[q_point](0) - 1.0,
+                              2.0 * edge_quadrature_points[q_point][0] - 1.0,
                               i);
                             tmp(3) =
                               weight *
@@ -792,7 +1131,7 @@ FE_Nedelec<dim>::initialize_restriction()
                           {
                             const double L_j =
                               legendre_polynomials[j + 1].value(
-                                edge_quadrature_points[q_point](0));
+                                edge_quadrature_points[q_point][0]);
 
                             for (unsigned int k = 0; k < tmp.size(); ++k)
                               system_rhs(j, k) += tmp(k) * L_j;
@@ -839,13 +1178,13 @@ FE_Nedelec<dim>::initialize_restriction()
                       {
                         const double L_i =
                           weight * legendre_polynomials[i].value(
-                                     quadrature_points[q_point](0));
+                                     quadrature_points[q_point][0]);
 
                         for (unsigned int j = 0; j < this->degree - 1; ++j)
                           assembling_matrix(i * (this->degree - 1) + j,
                                             q_point) =
                             L_i * lobatto_polynomials[j + 2].value(
-                                    quadrature_points[q_point](1));
+                                    quadrature_points[q_point][1]);
                       }
                   }
 
@@ -870,13 +1209,13 @@ FE_Nedelec<dim>::initialize_restriction()
                     {
                       tmp = 0.0;
 
-                      if (quadrature_points[q_point](0) < 0.5)
+                      if (quadrature_points[q_point][0] < 0.5)
                         {
-                          if (quadrature_points[q_point](1) < 0.5)
+                          if (quadrature_points[q_point][1] < 0.5)
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0),
-                                2.0 * quadrature_points[q_point](1));
+                                2.0 * quadrature_points[q_point][0],
+                                2.0 * quadrature_points[q_point][1]);
 
                               tmp(0) += 2.0 * this->shape_value_component(
                                                 dof, quadrature_point, 0);
@@ -887,8 +1226,8 @@ FE_Nedelec<dim>::initialize_restriction()
                           else
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0),
-                                2.0 * quadrature_points[q_point](1) - 1.0);
+                                2.0 * quadrature_points[q_point][0],
+                                2.0 * quadrature_points[q_point][1] - 1.0);
 
                               tmp(4) += 2.0 * this->shape_value_component(
                                                 dof, quadrature_point, 0);
@@ -897,11 +1236,11 @@ FE_Nedelec<dim>::initialize_restriction()
                             }
                         }
 
-                      else if (quadrature_points[q_point](1) < 0.5)
+                      else if (quadrature_points[q_point][1] < 0.5)
                         {
                           const Point<dim> quadrature_point(
-                            2.0 * quadrature_points[q_point](0) - 1.0,
-                            2.0 * quadrature_points[q_point](1));
+                            2.0 * quadrature_points[q_point][0] - 1.0,
+                            2.0 * quadrature_points[q_point][1]);
 
                           tmp(2) +=
                             2.0 * this->shape_value_component(dof,
@@ -916,8 +1255,8 @@ FE_Nedelec<dim>::initialize_restriction()
                       else
                         {
                           const Point<dim> quadrature_point(
-                            2.0 * quadrature_points[q_point](0) - 1.0,
-                            2.0 * quadrature_points[q_point](1) - 1.0);
+                            2.0 * quadrature_points[q_point][0] - 1.0,
+                            2.0 * quadrature_points[q_point][1] - 1.0);
 
                           tmp(6) +=
                             2.0 * this->shape_value_component(dof,
@@ -965,18 +1304,18 @@ FE_Nedelec<dim>::initialize_restriction()
                       for (unsigned int i = 0; i < this->degree; ++i)
                         {
                           const double L_i_0 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](0));
+                            quadrature_points[q_point][0]);
                           const double L_i_1 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](1));
+                            quadrature_points[q_point][1]);
 
                           for (unsigned int j = 0; j < this->degree - 1; ++j)
                             {
                               const double l_j_0 =
                                 L_i_0 * lobatto_polynomials[j + 2].value(
-                                          quadrature_points[q_point](1));
+                                          quadrature_points[q_point][1]);
                               const double l_j_1 =
                                 L_i_1 * lobatto_polynomials[j + 2].value(
-                                          quadrature_points[q_point](0));
+                                          quadrature_points[q_point][0]);
 
                               for (unsigned int k = 0; k < 4; ++k)
                                 {
@@ -1029,12 +1368,12 @@ FE_Nedelec<dim>::initialize_restriction()
               {
                 const double weight = 2.0 * edge_quadrature.weight(q_point);
 
-                if (edge_quadrature_points[q_point](0) < 0.5)
+                if (edge_quadrature_points[q_point][0] < 0.5)
                   for (unsigned int i = 0; i < 2; ++i)
                     for (unsigned int j = 0; j < 2; ++j)
                       {
                         Point<dim> quadrature_point(
-                          i, 2.0 * edge_quadrature_points[q_point](0), j);
+                          i, 2.0 * edge_quadrature_points[q_point][0], j);
 
                         this->restriction[index][i + 4 * j]((i + 4 * j) *
                                                               this->degree,
@@ -1042,7 +1381,7 @@ FE_Nedelec<dim>::initialize_restriction()
                           weight *
                           this->shape_value_component(dof, quadrature_point, 1);
                         quadrature_point =
-                          Point<dim>(2.0 * edge_quadrature_points[q_point](0),
+                          Point<dim>(2.0 * edge_quadrature_points[q_point][0],
                                      i,
                                      j);
                         this->restriction[index][2 * (i + 2 * j)](
@@ -1052,7 +1391,7 @@ FE_Nedelec<dim>::initialize_restriction()
                         quadrature_point =
                           Point<dim>(i,
                                      j,
-                                     2.0 * edge_quadrature_points[q_point](0));
+                                     2.0 * edge_quadrature_points[q_point][0]);
                         this->restriction[index][i + 2 * j]((i + 2 * (j + 4)) *
                                                               this->degree,
                                                             dof) +=
@@ -1065,7 +1404,7 @@ FE_Nedelec<dim>::initialize_restriction()
                     for (unsigned int j = 0; j < 2; ++j)
                       {
                         Point<dim> quadrature_point(
-                          i, 2.0 * edge_quadrature_points[q_point](0) - 1.0, j);
+                          i, 2.0 * edge_quadrature_points[q_point][0] - 1.0, j);
 
                         this->restriction[index][i + 4 * j + 2]((i + 4 * j) *
                                                                   this->degree,
@@ -1073,13 +1412,13 @@ FE_Nedelec<dim>::initialize_restriction()
                           weight *
                           this->shape_value_component(dof, quadrature_point, 1);
                         quadrature_point = Point<dim>(
-                          2.0 * edge_quadrature_points[q_point](0) - 1.0, i, j);
+                          2.0 * edge_quadrature_points[q_point][0] - 1.0, i, j);
                         this->restriction[index][2 * (i + 2 * j) + 1](
                           (i + 4 * j + 2) * this->degree, dof) +=
                           weight *
                           this->shape_value_component(dof, quadrature_point, 0);
                         quadrature_point = Point<dim>(
-                          i, j, 2.0 * edge_quadrature_points[q_point](0) - 1.0);
+                          i, j, 2.0 * edge_quadrature_points[q_point][0] - 1.0);
                         this->restriction[index][i + 2 * (j + 2)](
                           (i + 2 * (j + 4)) * this->degree, dof) +=
                           weight *
@@ -1113,7 +1452,7 @@ FE_Nedelec<dim>::initialize_restriction()
                     for (unsigned int i = 0; i < deg; ++i)
                       assembling_matrix(i, q_point) =
                         weight * legendre_polynomials[i + 1].value(
-                                   edge_quadrature_points[q_point](0));
+                                   edge_quadrature_points[q_point][0]);
                   }
 
                 FullMatrix<double> system_matrix(deg, deg);
@@ -1139,16 +1478,16 @@ FE_Nedelec<dim>::initialize_restriction()
                         {
                           const double weight = edge_quadrature.weight(q_point);
                           const Point<dim> quadrature_point_0(
-                            i, edge_quadrature_points[q_point](0), j);
+                            i, edge_quadrature_points[q_point][0], j);
                           const Point<dim> quadrature_point_1(
-                            edge_quadrature_points[q_point](0), i, j);
+                            edge_quadrature_points[q_point][0], i, j);
                           const Point<dim> quadrature_point_2(
-                            i, j, edge_quadrature_points[q_point](0));
+                            i, j, edge_quadrature_points[q_point][0]);
 
-                          if (edge_quadrature_points[q_point](0) < 0.5)
+                          if (edge_quadrature_points[q_point][0] < 0.5)
                             {
                               Point<dim> quadrature_point_3(
-                                i, 2.0 * edge_quadrature_points[q_point](0), j);
+                                i, 2.0 * edge_quadrature_points[q_point][0], j);
 
                               tmp(0) =
                                 weight * (2.0 * this->shape_value_component(
@@ -1168,7 +1507,7 @@ FE_Nedelec<dim>::initialize_restriction()
                                                             quadrature_point_0,
                                                             1);
                               quadrature_point_3 = Point<dim>(
-                                2.0 * edge_quadrature_points[q_point](0), i, j);
+                                2.0 * edge_quadrature_points[q_point][0], i, j);
                               tmp(2) =
                                 weight *
                                 (2.0 * this->shape_value_component(
@@ -1188,7 +1527,7 @@ FE_Nedelec<dim>::initialize_restriction()
                                                             quadrature_point_1,
                                                             0);
                               quadrature_point_3 = Point<dim>(
-                                i, j, 2.0 * edge_quadrature_points[q_point](0));
+                                i, j, 2.0 * edge_quadrature_points[q_point][0]);
                               tmp(4) =
                                 weight *
                                 (2.0 * this->shape_value_component(
@@ -1222,7 +1561,7 @@ FE_Nedelec<dim>::initialize_restriction()
 
                               Point<dim> quadrature_point_3(
                                 i,
-                                2.0 * edge_quadrature_points[q_point](0) - 1.0,
+                                2.0 * edge_quadrature_points[q_point][0] - 1.0,
                                 j);
 
                               tmp(1) = weight *
@@ -1243,7 +1582,7 @@ FE_Nedelec<dim>::initialize_restriction()
                                                             quadrature_point_1,
                                                             0);
                               quadrature_point_3 = Point<dim>(
-                                2.0 * edge_quadrature_points[q_point](0) - 1.0,
+                                2.0 * edge_quadrature_points[q_point][0] - 1.0,
                                 i,
                                 j);
                               tmp(3) =
@@ -1267,7 +1606,7 @@ FE_Nedelec<dim>::initialize_restriction()
                               quadrature_point_3 = Point<dim>(
                                 i,
                                 j,
-                                2.0 * edge_quadrature_points[q_point](0) - 1.0);
+                                2.0 * edge_quadrature_points[q_point][0] - 1.0);
                               tmp(5) =
                                 weight *
                                 (2.0 * this->shape_value_component(
@@ -1284,7 +1623,7 @@ FE_Nedelec<dim>::initialize_restriction()
                             {
                               const double L_k =
                                 legendre_polynomials[k + 1].value(
-                                  edge_quadrature_points[q_point](0));
+                                  edge_quadrature_points[q_point][0]);
 
                               for (unsigned int l = 0; l < tmp.size(); ++l)
                                 system_rhs(k, l) += tmp(l) * L_k;
@@ -1339,12 +1678,12 @@ FE_Nedelec<dim>::initialize_restriction()
                       {
                         const double L_i =
                           weight * legendre_polynomials[i].value(
-                                     face_quadrature_points[q_point](0));
+                                     face_quadrature_points[q_point][0]);
 
                         for (unsigned int j = 0; j < deg; ++j)
                           assembling_matrix(i * deg + j, q_point) =
                             L_i * lobatto_polynomials[j + 2].value(
-                                    face_quadrature_points[q_point](1));
+                                    face_quadrature_points[q_point][1]);
                       }
                   }
 
@@ -1371,30 +1710,30 @@ FE_Nedelec<dim>::initialize_restriction()
                       {
                         tmp = 0.0;
 
-                        if (face_quadrature_points[q_point](0) < 0.5)
+                        if (face_quadrature_points[q_point][0] < 0.5)
                           {
-                            if (face_quadrature_points[q_point](1) < 0.5)
+                            if (face_quadrature_points[q_point][1] < 0.5)
                               {
                                 Point<dim> quadrature_point_0(
                                   i,
-                                  2.0 * face_quadrature_points[q_point](0),
-                                  2.0 * face_quadrature_points[q_point](1));
+                                  2.0 * face_quadrature_points[q_point][0],
+                                  2.0 * face_quadrature_points[q_point][1]);
 
                                 tmp(0) += 2.0 * this->shape_value_component(
                                                   dof, quadrature_point_0, 1);
                                 tmp(1) += 2.0 * this->shape_value_component(
                                                   dof, quadrature_point_0, 2);
                                 quadrature_point_0 = Point<dim>(
-                                  2.0 * face_quadrature_points[q_point](0),
+                                  2.0 * face_quadrature_points[q_point][0],
                                   i,
-                                  2.0 * face_quadrature_points[q_point](1));
+                                  2.0 * face_quadrature_points[q_point][1]);
                                 tmp(8) += 2.0 * this->shape_value_component(
                                                   dof, quadrature_point_0, 2);
                                 tmp(9) += 2.0 * this->shape_value_component(
                                                   dof, quadrature_point_0, 0);
                                 quadrature_point_0 = Point<dim>(
-                                  2.0 * face_quadrature_points[q_point](0),
-                                  2.0 * face_quadrature_points[q_point](1),
+                                  2.0 * face_quadrature_points[q_point][0],
+                                  2.0 * face_quadrature_points[q_point][1],
                                   i);
                                 tmp(16) += 2.0 * this->shape_value_component(
                                                    dof, quadrature_point_0, 0);
@@ -1406,8 +1745,8 @@ FE_Nedelec<dim>::initialize_restriction()
                               {
                                 Point<dim> quadrature_point_0(
                                   i,
-                                  2.0 * face_quadrature_points[q_point](0),
-                                  2.0 * face_quadrature_points[q_point](1) -
+                                  2.0 * face_quadrature_points[q_point][0],
+                                  2.0 * face_quadrature_points[q_point][1] -
                                     1.0);
 
                                 tmp(2) += 2.0 * this->shape_value_component(
@@ -1415,17 +1754,17 @@ FE_Nedelec<dim>::initialize_restriction()
                                 tmp(3) += 2.0 * this->shape_value_component(
                                                   dof, quadrature_point_0, 2);
                                 quadrature_point_0 = Point<dim>(
-                                  2.0 * face_quadrature_points[q_point](0),
+                                  2.0 * face_quadrature_points[q_point][0],
                                   i,
-                                  2.0 * face_quadrature_points[q_point](1) -
+                                  2.0 * face_quadrature_points[q_point][1] -
                                     1.0);
                                 tmp(10) += 2.0 * this->shape_value_component(
                                                    dof, quadrature_point_0, 2);
                                 tmp(11) += 2.0 * this->shape_value_component(
                                                    dof, quadrature_point_0, 0);
                                 quadrature_point_0 = Point<dim>(
-                                  2.0 * face_quadrature_points[q_point](0),
-                                  2.0 * face_quadrature_points[q_point](1) -
+                                  2.0 * face_quadrature_points[q_point][0],
+                                  2.0 * face_quadrature_points[q_point][1] -
                                     1.0,
                                   i);
                                 tmp(18) += 2.0 * this->shape_value_component(
@@ -1435,28 +1774,28 @@ FE_Nedelec<dim>::initialize_restriction()
                               }
                           }
 
-                        else if (face_quadrature_points[q_point](1) < 0.5)
+                        else if (face_quadrature_points[q_point][1] < 0.5)
                           {
                             Point<dim> quadrature_point_0(
                               i,
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
-                              2.0 * face_quadrature_points[q_point](1));
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
+                              2.0 * face_quadrature_points[q_point][1]);
 
                             tmp(4) += 2.0 * this->shape_value_component(
                                               dof, quadrature_point_0, 1);
                             tmp(5) += 2.0 * this->shape_value_component(
                                               dof, quadrature_point_0, 2);
                             quadrature_point_0 = Point<dim>(
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
                               i,
-                              2.0 * face_quadrature_points[q_point](1));
+                              2.0 * face_quadrature_points[q_point][1]);
                             tmp(12) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 2);
                             tmp(13) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 0);
                             quadrature_point_0 = Point<dim>(
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
-                              2.0 * face_quadrature_points[q_point](1),
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
+                              2.0 * face_quadrature_points[q_point][1],
                               i);
                             tmp(20) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 0);
@@ -1468,24 +1807,24 @@ FE_Nedelec<dim>::initialize_restriction()
                           {
                             Point<dim> quadrature_point_0(
                               i,
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
-                              2.0 * face_quadrature_points[q_point](1) - 1.0);
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
+                              2.0 * face_quadrature_points[q_point][1] - 1.0);
 
                             tmp(6) += 2.0 * this->shape_value_component(
                                               dof, quadrature_point_0, 1);
                             tmp(7) += 2.0 * this->shape_value_component(
                                               dof, quadrature_point_0, 2);
                             quadrature_point_0 = Point<dim>(
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
                               i,
-                              2.0 * face_quadrature_points[q_point](1) - 1.0);
+                              2.0 * face_quadrature_points[q_point][1] - 1.0);
                             tmp(14) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 2);
                             tmp(15) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 0);
                             quadrature_point_0 = Point<dim>(
-                              2.0 * face_quadrature_points[q_point](0) - 1.0,
-                              2.0 * face_quadrature_points[q_point](1) - 1.0,
+                              2.0 * face_quadrature_points[q_point][0] - 1.0,
+                              2.0 * face_quadrature_points[q_point][1] - 1.0,
                               i);
                             tmp(22) += 2.0 * this->shape_value_component(
                                                dof, quadrature_point_0, 0);
@@ -1495,15 +1834,15 @@ FE_Nedelec<dim>::initialize_restriction()
 
                         const Point<dim> quadrature_point_0(
                           i,
-                          face_quadrature_points[q_point](0),
-                          face_quadrature_points[q_point](1));
+                          face_quadrature_points[q_point][0],
+                          face_quadrature_points[q_point][1]);
                         const Point<dim> quadrature_point_1(
-                          face_quadrature_points[q_point](0),
+                          face_quadrature_points[q_point][0],
                           i,
-                          face_quadrature_points[q_point](1));
+                          face_quadrature_points[q_point][1]);
                         const Point<dim> quadrature_point_2(
-                          face_quadrature_points[q_point](0),
-                          face_quadrature_points[q_point](1),
+                          face_quadrature_points[q_point][0],
+                          face_quadrature_points[q_point][1],
                           i);
 
                         for (unsigned int j = 0; j < 2; ++j)
@@ -1559,18 +1898,18 @@ FE_Nedelec<dim>::initialize_restriction()
                         for (unsigned int j = 0; j <= deg; ++j)
                           {
                             const double L_j_0 = legendre_polynomials[j].value(
-                              face_quadrature_points[q_point](0));
+                              face_quadrature_points[q_point][0]);
                             const double L_j_1 = legendre_polynomials[j].value(
-                              face_quadrature_points[q_point](1));
+                              face_quadrature_points[q_point][1]);
 
                             for (unsigned int k = 0; k < deg; ++k)
                               {
                                 const double l_k_0 =
                                   L_j_0 * lobatto_polynomials[k + 2].value(
-                                            face_quadrature_points[q_point](1));
+                                            face_quadrature_points[q_point][1]);
                                 const double l_k_1 =
                                   L_j_1 * lobatto_polynomials[k + 2].value(
-                                            face_quadrature_points[q_point](0));
+                                            face_quadrature_points[q_point][0]);
 
                                 for (unsigned int l = 0; l < 4; ++l)
                                   {
@@ -1673,19 +2012,19 @@ FE_Nedelec<dim>::initialize_restriction()
                       {
                         const double L_i =
                           weight * legendre_polynomials[i].value(
-                                     quadrature_points[q_point](0));
+                                     quadrature_points[q_point][0]);
 
                         for (unsigned int j = 0; j < deg; ++j)
                           {
                             const double l_j =
                               L_i * lobatto_polynomials[j + 2].value(
-                                      quadrature_points[q_point](1));
+                                      quadrature_points[q_point][1]);
 
                             for (unsigned int k = 0; k < deg; ++k)
                               assembling_matrix((i * deg + j) * deg + k,
                                                 q_point) =
                                 l_j * lobatto_polynomials[k + 2].value(
-                                        quadrature_points[q_point](2));
+                                        quadrature_points[q_point][2]);
                           }
                       }
                   }
@@ -1711,16 +2050,16 @@ FE_Nedelec<dim>::initialize_restriction()
                     {
                       tmp = 0.0;
 
-                      if (quadrature_points[q_point](0) < 0.5)
+                      if (quadrature_points[q_point][0] < 0.5)
                         {
-                          if (quadrature_points[q_point](1) < 0.5)
+                          if (quadrature_points[q_point][1] < 0.5)
                             {
-                              if (quadrature_points[q_point](2) < 0.5)
+                              if (quadrature_points[q_point][2] < 0.5)
                                 {
                                   const Point<dim> quadrature_point(
-                                    2.0 * quadrature_points[q_point](0),
-                                    2.0 * quadrature_points[q_point](1),
-                                    2.0 * quadrature_points[q_point](2));
+                                    2.0 * quadrature_points[q_point][0],
+                                    2.0 * quadrature_points[q_point][1],
+                                    2.0 * quadrature_points[q_point][2]);
 
                                   tmp(0) += 2.0 * this->shape_value_component(
                                                     dof, quadrature_point, 0);
@@ -1733,9 +2072,9 @@ FE_Nedelec<dim>::initialize_restriction()
                               else
                                 {
                                   const Point<dim> quadrature_point(
-                                    2.0 * quadrature_points[q_point](0),
-                                    2.0 * quadrature_points[q_point](1),
-                                    2.0 * quadrature_points[q_point](2) - 1.0);
+                                    2.0 * quadrature_points[q_point][0],
+                                    2.0 * quadrature_points[q_point][1],
+                                    2.0 * quadrature_points[q_point][2] - 1.0);
 
                                   tmp(3) += 2.0 * this->shape_value_component(
                                                     dof, quadrature_point, 0);
@@ -1746,12 +2085,12 @@ FE_Nedelec<dim>::initialize_restriction()
                                 }
                             }
 
-                          else if (quadrature_points[q_point](2) < 0.5)
+                          else if (quadrature_points[q_point][2] < 0.5)
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0),
-                                2.0 * quadrature_points[q_point](1) - 1.0,
-                                2.0 * quadrature_points[q_point](2));
+                                2.0 * quadrature_points[q_point][0],
+                                2.0 * quadrature_points[q_point][1] - 1.0,
+                                2.0 * quadrature_points[q_point][2]);
 
                               tmp(6) += 2.0 * this->shape_value_component(
                                                 dof, quadrature_point, 0);
@@ -1764,9 +2103,9 @@ FE_Nedelec<dim>::initialize_restriction()
                           else
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0),
-                                2.0 * quadrature_points[q_point](1) - 1.0,
-                                2.0 * quadrature_points[q_point](2) - 1.0);
+                                2.0 * quadrature_points[q_point][0],
+                                2.0 * quadrature_points[q_point][1] - 1.0,
+                                2.0 * quadrature_points[q_point][2] - 1.0);
 
                               tmp(9) += 2.0 * this->shape_value_component(
                                                 dof, quadrature_point, 0);
@@ -1777,14 +2116,14 @@ FE_Nedelec<dim>::initialize_restriction()
                             }
                         }
 
-                      else if (quadrature_points[q_point](1) < 0.5)
+                      else if (quadrature_points[q_point][1] < 0.5)
                         {
-                          if (quadrature_points[q_point](2) < 0.5)
+                          if (quadrature_points[q_point][2] < 0.5)
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0) - 1.0,
-                                2.0 * quadrature_points[q_point](1),
-                                2.0 * quadrature_points[q_point](2));
+                                2.0 * quadrature_points[q_point][0] - 1.0,
+                                2.0 * quadrature_points[q_point][1],
+                                2.0 * quadrature_points[q_point][2]);
 
                               tmp(12) += 2.0 * this->shape_value_component(
                                                  dof, quadrature_point, 0);
@@ -1797,9 +2136,9 @@ FE_Nedelec<dim>::initialize_restriction()
                           else
                             {
                               const Point<dim> quadrature_point(
-                                2.0 * quadrature_points[q_point](0) - 1.0,
-                                2.0 * quadrature_points[q_point](1),
-                                2.0 * quadrature_points[q_point](2) - 1.0);
+                                2.0 * quadrature_points[q_point][0] - 1.0,
+                                2.0 * quadrature_points[q_point][1],
+                                2.0 * quadrature_points[q_point][2] - 1.0);
 
                               tmp(15) += 2.0 * this->shape_value_component(
                                                  dof, quadrature_point, 0);
@@ -1810,12 +2149,12 @@ FE_Nedelec<dim>::initialize_restriction()
                             }
                         }
 
-                      else if (quadrature_points[q_point](2) < 0.5)
+                      else if (quadrature_points[q_point][2] < 0.5)
                         {
                           const Point<dim> quadrature_point(
-                            2.0 * quadrature_points[q_point](0) - 1.0,
-                            2.0 * quadrature_points[q_point](1) - 1.0,
-                            2.0 * quadrature_points[q_point](2));
+                            2.0 * quadrature_points[q_point][0] - 1.0,
+                            2.0 * quadrature_points[q_point][1] - 1.0,
+                            2.0 * quadrature_points[q_point][2]);
 
                           tmp(18) +=
                             2.0 * this->shape_value_component(dof,
@@ -1834,9 +2173,9 @@ FE_Nedelec<dim>::initialize_restriction()
                       else
                         {
                           const Point<dim> quadrature_point(
-                            2.0 * quadrature_points[q_point](0) - 1.0,
-                            2.0 * quadrature_points[q_point](1) - 1.0,
-                            2.0 * quadrature_points[q_point](2) - 1.0);
+                            2.0 * quadrature_points[q_point][0] - 1.0,
+                            2.0 * quadrature_points[q_point][1] - 1.0,
+                            2.0 * quadrature_points[q_point][2] - 1.0);
 
                           tmp(21) +=
                             2.0 * this->shape_value_component(dof,
@@ -1955,35 +2294,35 @@ FE_Nedelec<dim>::initialize_restriction()
                       for (unsigned int i = 0; i <= deg; ++i)
                         {
                           const double L_i_0 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](0));
+                            quadrature_points[q_point][0]);
                           const double L_i_1 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](1));
+                            quadrature_points[q_point][1]);
                           const double L_i_2 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](2));
+                            quadrature_points[q_point][2]);
 
                           for (unsigned int j = 0; j < deg; ++j)
                             {
                               const double l_j_0 =
                                 L_i_0 * lobatto_polynomials[j + 2].value(
-                                          quadrature_points[q_point](1));
+                                          quadrature_points[q_point][1]);
                               const double l_j_1 =
                                 L_i_1 * lobatto_polynomials[j + 2].value(
-                                          quadrature_points[q_point](0));
+                                          quadrature_points[q_point][0]);
                               const double l_j_2 =
                                 L_i_2 * lobatto_polynomials[j + 2].value(
-                                          quadrature_points[q_point](0));
+                                          quadrature_points[q_point][0]);
 
                               for (unsigned int k = 0; k < deg; ++k)
                                 {
                                   const double l_k_0 =
                                     l_j_0 * lobatto_polynomials[k + 2].value(
-                                              quadrature_points[q_point](2));
+                                              quadrature_points[q_point][2]);
                                   const double l_k_1 =
                                     l_j_1 * lobatto_polynomials[k + 2].value(
-                                              quadrature_points[q_point](2));
+                                              quadrature_points[q_point][2]);
                                   const double l_k_2 =
                                     l_j_2 * lobatto_polynomials[k + 2].value(
-                                              quadrature_points[q_point](1));
+                                              quadrature_points[q_point][1]);
 
                                   for (unsigned int l = 0; l < 8; ++l)
                                     {
@@ -2049,7 +2388,7 @@ FE_Nedelec<dim>::initialize_restriction()
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -2139,7 +2478,7 @@ FE_Nedelec<dim>::has_support_on_face(const unsigned int shape_index,
 
             default:
               {
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
                 return false;
               }
           }
@@ -2318,14 +2657,14 @@ FE_Nedelec<dim>::has_support_on_face(const unsigned int shape_index,
 
             default:
               {
-                Assert(false, ExcNotImplemented());
+                DEAL_II_NOT_IMPLEMENTED();
                 return false;
               }
           }
 
       default:
         {
-          Assert(false, ExcNotImplemented());
+          DEAL_II_NOT_IMPLEMENTED();
           return false;
         }
     }
@@ -2363,7 +2702,7 @@ FE_Nedelec<dim>::compare_for_domination(const FiniteElement<dim> &fe_other,
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -2420,7 +2759,7 @@ FE_Nedelec<dim>::hp_line_dof_identities(
 
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<std::pair<unsigned int, unsigned int>>();
     }
 }
@@ -2467,7 +2806,7 @@ FE_Nedelec<dim>::hp_quad_dof_identities(const FiniteElement<dim> &fe_other,
 
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return std::vector<std::pair<unsigned int, unsigned int>>();
     }
 }
@@ -2565,7 +2904,7 @@ FE_Nedelec<1>::get_subface_interpolation_matrix(const FiniteElement<1, 1> &,
                                                 FullMatrix<double> &,
                                                 const unsigned int) const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
 }
 
 
@@ -2643,7 +2982,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                  ++q_point)
               {
                 const Point<dim> quadrature_point(
-                  0.0, 0.5 * (edge_quadrature_points[q_point](0) + subface));
+                  0.0, 0.5 * (edge_quadrature_points[q_point][0] + subface));
 
                 interpolation_matrix(0, dof) +=
                   0.5 * edge_quadrature.weight(q_point) *
@@ -2673,7 +3012,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                     for (unsigned int i = 0; i < source_fe.degree - 1; ++i)
                       assembling_matrix(i, q_point) =
                         weight * legendre_polynomials[i + 1].value(
-                                   edge_quadrature_points[q_point](0));
+                                   edge_quadrature_points[q_point][0]);
                   }
 
                 FullMatrix<double> system_matrix(source_fe.degree - 1,
@@ -2697,9 +3036,9 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                     {
                       const Point<dim> quadrature_point_0(
                         0.0,
-                        0.5 * (edge_quadrature_points[q_point](0) + subface));
+                        0.5 * (edge_quadrature_points[q_point][0] + subface));
                       const Point<dim> quadrature_point_1(
-                        0.0, edge_quadrature_points[q_point](0));
+                        0.0, edge_quadrature_points[q_point][0]);
                       const double tmp =
                         edge_quadrature.weight(q_point) *
                         (0.5 * this->shape_value_component(dof,
@@ -2713,7 +3052,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                       for (unsigned int i = 0; i < source_fe.degree - 1; ++i)
                         system_rhs(i) +=
                           tmp * legendre_polynomials[i + 1].value(
-                                  edge_quadrature_points[q_point](0));
+                                  edge_quadrature_points[q_point][0]);
                     }
 
                   system_matrix_inv.vmult(solution, system_rhs);
@@ -2745,7 +3084,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                   {
                     Point<dim> quadrature_point(
                       0.5 * (i + shifts[subface][0]),
-                      0.5 * (edge_quadrature_points[q_point](0) +
+                      0.5 * (edge_quadrature_points[q_point][0] +
                              shifts[subface][1]),
                       0.0);
 
@@ -2754,7 +3093,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                       this->shape_value_component(
                         this->face_to_cell_index(dof, 4), quadrature_point, 1);
                     quadrature_point =
-                      Point<dim>(0.5 * (edge_quadrature_points[q_point](0) +
+                      Point<dim>(0.5 * (edge_quadrature_points[q_point][0] +
                                         shifts[subface][0]),
                                  0.5 * (i + shifts[subface][1]),
                                  0.0);
@@ -2788,7 +3127,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                     for (unsigned int i = 0; i < source_fe.degree - 1; ++i)
                       assembling_matrix(i, q_point) =
                         weight * legendre_polynomials[i + 1].value(
-                                   edge_quadrature_points[q_point](0));
+                                   edge_quadrature_points[q_point][0]);
                   }
 
                 FullMatrix<double> system_matrix(source_fe.degree - 1,
@@ -2819,11 +3158,11 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                         {
                           Point<dim> quadrature_point_0(
                             0.5 * (i + shifts[subface][0]),
-                            0.5 * (edge_quadrature_points[q_point](0) +
+                            0.5 * (edge_quadrature_points[q_point][0] +
                                    shifts[subface][1]),
                             0.0);
                           Point<dim> quadrature_point_1(
-                            i, edge_quadrature_points[q_point](0), 0.0);
+                            i, edge_quadrature_points[q_point][0], 0.0);
 
                           tmp(i) =
                             weight *
@@ -2836,12 +3175,12 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                                  i * source_fe.degree, quadrature_point_1, 1));
                           quadrature_point_0 =
                             Point<dim>(0.5 *
-                                         (edge_quadrature_points[q_point](0) +
+                                         (edge_quadrature_points[q_point][0] +
                                           shifts[subface][0]),
                                        0.5 * (i + shifts[subface][1]),
                                        0.0);
                           quadrature_point_1 =
-                            Point<dim>(edge_quadrature_points[q_point](0),
+                            Point<dim>(edge_quadrature_points[q_point][0],
                                        i,
                                        0.0);
                           tmp(i + 2) =
@@ -2861,7 +3200,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                       for (unsigned int i = 0; i < source_fe.degree - 1; ++i)
                         {
                           const double L_i = legendre_polynomials[i + 1].value(
-                            edge_quadrature_points[q_point](0));
+                            edge_quadrature_points[q_point][0]);
 
                           for (unsigned int j = 0;
                                j < GeometryInfo<dim>::lines_per_face;
@@ -2906,13 +3245,13 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                       {
                         const double L_i =
                           weight * legendre_polynomials[i].value(
-                                     quadrature_points[q_point](0));
+                                     quadrature_points[q_point][0]);
 
                         for (unsigned int j = 0; j < source_fe.degree - 1; ++j)
                           assembling_matrix(i * (source_fe.degree - 1) + j,
                                             q_point) =
                             L_i * lobatto_polynomials[j + 2].value(
-                                    quadrature_points[q_point](1));
+                                    quadrature_points[q_point][1]);
                       }
                   }
 
@@ -2938,9 +3277,9 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                     {
                       Point<dim> quadrature_point(
                         0.5 *
-                          (quadrature_points[q_point](0) + shifts[subface][0]),
+                          (quadrature_points[q_point][0] + shifts[subface][0]),
                         0.5 *
-                          (quadrature_points[q_point](1) + shifts[subface][1]),
+                          (quadrature_points[q_point][1] + shifts[subface][1]),
                         0.0);
                       tmp(0) = 0.5 * this->shape_value_component(
                                        this->face_to_cell_index(dof, 4),
@@ -2951,8 +3290,8 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                                        quadrature_point,
                                        1);
                       quadrature_point =
-                        Point<dim>(quadrature_points[q_point](0),
-                                   quadrature_points[q_point](1),
+                        Point<dim>(quadrature_points[q_point][0],
+                                   quadrature_points[q_point][1],
                                    0.0);
 
                       for (unsigned int i = 0; i < 2; ++i)
@@ -2976,9 +3315,9 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                       for (unsigned int i = 0; i < source_fe.degree; ++i)
                         {
                           const double L_i_0 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](0));
+                            quadrature_points[q_point][0]);
                           const double L_i_1 = legendre_polynomials[i].value(
-                            quadrature_points[q_point](1));
+                            quadrature_points[q_point][1]);
 
                           for (unsigned int j = 0; j < source_fe.degree - 1;
                                ++j)
@@ -2986,11 +3325,11 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
                               system_rhs(i * (source_fe.degree - 1) + j, 0) +=
                                 tmp(0) * L_i_0 *
                                 lobatto_polynomials[j + 2].value(
-                                  quadrature_points[q_point](1));
+                                  quadrature_points[q_point][1]);
                               system_rhs(i * (source_fe.degree - 1) + j, 1) +=
                                 tmp(1) * L_i_1 *
                                 lobatto_polynomials[j + 2].value(
-                                  quadrature_points[q_point](0));
+                                  quadrature_points[q_point][0]);
                             }
                         }
                     }
@@ -3021,7 +3360,7 @@ FE_Nedelec<dim>::get_subface_interpolation_matrix(
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -3036,12 +3375,13 @@ FE_Nedelec<dim>::get_prolongation_matrix(
   Assert(refinement_case != RefinementCase<dim>::no_refinement,
          ExcMessage(
            "Prolongation matrices are only available for refined cells!"));
-  AssertIndexRange(child, GeometryInfo<dim>::n_children(refinement_case));
+  AssertIndexRange(
+    child, this->reference_cell().template n_children<dim>(refinement_case));
 
   // initialization upon first request
   if (this->prolongation[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(prolongation_matrix_mutex);
 
       // if matrix got updated while waiting for the lock
       if (this->prolongation[refinement_case - 1][child].n() ==
@@ -3091,13 +3431,14 @@ FE_Nedelec<dim>::get_restriction_matrix(
   Assert(refinement_case != RefinementCase<dim>::no_refinement,
          ExcMessage(
            "Restriction matrices are only available for refined cells!"));
-  AssertIndexRange(
-    child, GeometryInfo<dim>::n_children(RefinementCase<dim>(refinement_case)));
+  AssertIndexRange(child,
+                   this->reference_cell().template n_children<dim>(
+                     RefinementCase<dim>(refinement_case)));
 
   // initialization upon first request
   if (this->restriction[refinement_case - 1][child].n() == 0)
     {
-      std::lock_guard<std::mutex> lock(this->mutex);
+      std::lock_guard<std::mutex> lock(restriction_matrix_mutex);
 
       // if matrix got updated while waiting for the lock...
       if (this->restriction[refinement_case - 1][child].n() ==
@@ -3228,8 +3569,8 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                     system_matrix(i, j) +=
                       boundary_weights(q_point, j) *
                       lobatto_polynomials_grad[i + 1].value(
-                        this->generalized_face_support_points[face_no][q_point](
-                          0));
+                        this->generalized_face_support_points[face_no][q_point]
+                                                             [0]);
 
               FullMatrix<double> system_matrix_inv(this->degree - 1,
                                                    this->degree - 1);
@@ -3311,19 +3652,19 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                           legendre_polynomials[i].value(
                             this->generalized_support_points
                               [q_point + GeometryInfo<dim>::lines_per_cell *
-                                           n_edge_points](0)) *
+                                           n_edge_points][0]) *
                           lobatto_polynomials[j + 2].value(
                             this->generalized_support_points
                               [q_point + GeometryInfo<dim>::lines_per_cell *
-                                           n_edge_points](1)) *
+                                           n_edge_points][1]) *
                           lobatto_polynomials_grad[k].value(
                             this->generalized_support_points
                               [q_point + GeometryInfo<dim>::lines_per_cell *
-                                           n_edge_points](0)) *
+                                           n_edge_points][0]) *
                           lobatto_polynomials[l + 2].value(
                             this->generalized_support_points
                               [q_point + GeometryInfo<dim>::lines_per_cell *
-                                           n_edge_points](1));
+                                           n_edge_points][1]);
 
               system_matrix_inv.reinit(system_matrix.m(), system_matrix.m());
               system_matrix_inv.invert(system_matrix);
@@ -3358,11 +3699,11 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                         lobatto_polynomials_grad[i].value(
                           this->generalized_support_points
                             [q_point + GeometryInfo<dim>::lines_per_cell *
-                                         n_edge_points](0)) *
+                                         n_edge_points][0]) *
                         lobatto_polynomials[j + 2].value(
                           this->generalized_support_points
                             [q_point + GeometryInfo<dim>::lines_per_cell *
-                                         n_edge_points](1));
+                                         n_edge_points][1]);
                 }
 
               solution.reinit(system_matrix.m());
@@ -3409,11 +3750,11 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                         lobatto_polynomials_grad[i].value(
                           this->generalized_support_points
                             [q_point + GeometryInfo<dim>::lines_per_cell *
-                                         n_edge_points](1)) *
+                                         n_edge_points][1]) *
                         lobatto_polynomials[j + 2].value(
                           this->generalized_support_points
                             [q_point + GeometryInfo<dim>::lines_per_cell *
-                                         n_edge_points](0));
+                                         n_edge_points][0]);
                 }
 
               system_matrix_inv.vmult(solution, system_rhs);
@@ -3508,8 +3849,8 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                     system_matrix(i, j) +=
                       boundary_weights(q_point, j) *
                       lobatto_polynomials_grad[i + 1].value(
-                        this->generalized_face_support_points[face_no][q_point](
-                          1));
+                        this->generalized_face_support_points[face_no][q_point]
+                                                             [1]);
 
               FullMatrix<double> system_matrix_inv(this->degree - 1,
                                                    this->degree - 1);
@@ -3588,10 +3929,10 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                                            2 * (k * (this->degree - 1) + l)) *
                           legendre_polynomials[i].value(
                             this->generalized_face_support_points
-                              [face_no][q_point + 4 * n_edge_points](0)) *
+                              [face_no][q_point + 4 * n_edge_points][0]) *
                           lobatto_polynomials[j + 2].value(
                             this->generalized_face_support_points
-                              [face_no][q_point + 4 * n_edge_points](1));
+                              [face_no][q_point + 4 * n_edge_points][1]);
 
               system_matrix_inv.reinit(system_matrix.m(), system_matrix.m());
               system_matrix_inv.invert(system_matrix);
@@ -3745,42 +4086,42 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](0)) *
+                                     n_face_points][0]) *
                               lobatto_polynomials[j + 2].value(
                                 this->generalized_support_points
                                   [q_point +
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](1)) *
+                                     n_face_points][1]) *
                               lobatto_polynomials[k + 2].value(
                                 this->generalized_support_points
                                   [q_point +
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](2)) *
+                                     n_face_points][2]) *
                               lobatto_polynomials_grad[l].value(
                                 this->generalized_support_points
                                   [q_point +
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](0)) *
+                                     n_face_points][0]) *
                               lobatto_polynomials[m + 2].value(
                                 this->generalized_support_points
                                   [q_point +
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](1)) *
+                                     n_face_points][1]) *
                               lobatto_polynomials[n + 2].value(
                                 this->generalized_support_points
                                   [q_point +
                                    GeometryInfo<dim>::lines_per_cell *
                                      n_edge_points +
                                    GeometryInfo<dim>::faces_per_cell *
-                                     n_face_points](2));
+                                     n_face_points][2]);
 
               system_matrix_inv.reinit(system_matrix.m(), system_matrix.m());
               system_matrix_inv.invert(system_matrix);
@@ -3847,21 +4188,21 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](0)) *
+                                 n_face_points][0]) *
                           lobatto_polynomials[j + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](1)) *
+                                 n_face_points][1]) *
                           lobatto_polynomials[k + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](2));
+                                 n_face_points][2]);
                 }
 
               solution.reinit(system_rhs.size());
@@ -3958,21 +4299,21 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](1)) *
+                                 n_face_points][1]) *
                           lobatto_polynomials[j + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](0)) *
+                                 n_face_points][0]) *
                           lobatto_polynomials[k + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](2));
+                                 n_face_points][2]);
                 }
 
               system_matrix_inv.vmult(solution, system_rhs);
@@ -4051,21 +4392,21 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](2)) *
+                                 n_face_points][2]) *
                           lobatto_polynomials[j + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](0)) *
+                                 n_face_points][0]) *
                           lobatto_polynomials[k + 2].value(
                             this->generalized_support_points
                               [q_point +
                                GeometryInfo<dim>::lines_per_cell *
                                  n_edge_points +
                                GeometryInfo<dim>::faces_per_cell *
-                                 n_face_points](1));
+                                 n_face_points][1]);
                 }
 
               system_matrix_inv.vmult(solution, system_rhs);
@@ -4090,7 +4431,7 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
         }
 
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
     }
 }
 
@@ -4116,7 +4457,7 @@ template <int dim>
 std::size_t
 FE_Nedelec<dim>::memory_consumption() const
 {
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return 0;
 }
 
@@ -4173,7 +4514,7 @@ FE_Nedelec<dim>::get_embedding_dofs(const unsigned int sub_degree) const
           return embedding_dofs;
         }
       default:
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
         return std::vector<unsigned int>();
     }
 }

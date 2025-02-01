@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2008 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_trilinos_solver_h
 #define dealii_trilinos_solver_h
@@ -20,6 +19,8 @@
 #include <deal.II/base/config.h>
 
 #ifdef DEAL_II_WITH_TRILINOS
+
+#  include <deal.II/base/template_constraints.h>
 
 #  include <deal.II/lac/exceptions.h>
 #  include <deal.II/lac/la_parallel_vector.h>
@@ -481,7 +482,7 @@ namespace TrilinosWrappers
    *
    * @ingroup TrilinosWrappers
    */
-  class SolverDirect
+  class SolverDirect : public EnableObserverPointer
   {
   public:
     /**
@@ -524,6 +525,11 @@ namespace TrilinosWrappers
     };
 
     /**
+     * Constructor. Creates the solver without solver control object.
+     */
+    explicit SolverDirect(const AdditionalData &data = AdditionalData());
+
+    /**
      * Constructor. Takes the solver control object and creates the solver.
      */
     SolverDirect(SolverControl        &cn,
@@ -544,9 +550,19 @@ namespace TrilinosWrappers
     initialize(const SparseMatrix &A);
 
     /**
+     * Initializes the direct solver for the matrix <tt>A</tt> and creates a
+     * factorization for it with the package chosen from the additional
+     * data structure. Note that there is no need for a preconditioner
+     * here and solve() is not called. Furthermore, @p data replaces the
+     * data stored in this instance.
+     */
+    void
+    initialize(const SparseMatrix &A, const AdditionalData &data);
+
+    /**
      * Solve the linear system <tt>Ax=b</tt> based on the
-     * package set in initialize(). Note the matrix is not refactorized during
-     * this call.
+     * package set in the constructor on initialize(). Note the matrix is not
+     * refactored during this call.
      */
     void
     solve(MPI::Vector &x, const MPI::Vector &b);
@@ -554,11 +570,28 @@ namespace TrilinosWrappers
     /**
      * Solve the linear system <tt>Ax=b</tt> based on the package set in
      * initialize() for deal.II's own parallel vectors. Note the matrix is not
-     * refactorized during this call.
+     * refactored during this call.
      */
     void
     solve(dealii::LinearAlgebra::distributed::Vector<double>       &x,
           const dealii::LinearAlgebra::distributed::Vector<double> &b);
+
+    /**
+     * Solve the linear system <tt>Ax=b</tt> based on the
+     * package set in the constructor or initialize(). Note the matrix is not
+     * refactored during this call.
+     */
+    void
+    vmult(MPI::Vector &x, const MPI::Vector &b) const;
+
+    /**
+     * Solve the linear system <tt>Ax=b</tt> based on the package set in
+     * initialize() for deal.II's own parallel vectors. Note the matrix is not
+     * refactored during this call.
+     */
+    void
+    vmult(dealii::LinearAlgebra::distributed::Vector<double>       &x,
+          const dealii::LinearAlgebra::distributed::Vector<double> &b) const;
 
     /**
      * Solve the linear system <tt>Ax=b</tt>. Creates a factorization of the
@@ -593,6 +626,28 @@ namespace TrilinosWrappers
           const dealii::LinearAlgebra::distributed::Vector<double> &b);
 
     /**
+     * Solve the linear system <tt>Ax=b</tt> where A is an operator,
+     * and the vectors x and b are native Trilinos vector types.
+     * This function can be used when A is a LinearOperators derived
+     * from a TrilinosPayload.
+     */
+    void
+    solve(const Epetra_Operator    &A,
+          Epetra_MultiVector       &x,
+          const Epetra_MultiVector &b);
+
+    /**
+     * Solve the linear system <tt>AX=B</tt> where A is an operator,
+     * and the X and B are FullMatrix types. The matrices are
+     * converted to multi vector and the resulting problem is solved
+     * in a batched way.
+     */
+    void
+    solve(const SparseMatrix       &sparse_matrix,
+          FullMatrix<double>       &solution,
+          const FullMatrix<double> &rhs);
+
+    /**
      * Access to object that controls convergence.
      */
     SolverControl &
@@ -613,6 +668,11 @@ namespace TrilinosWrappers
      */
     void
     do_solve();
+
+    /**
+     * Local dummy solver control object.
+     */
+    SolverControl solver_control_own;
 
     /**
      * Reference to the object that controls convergence of the iterative
@@ -638,7 +698,7 @@ namespace TrilinosWrappers
     /**
      * Store a copy of the flags for this particular solver.
      */
-    const AdditionalData additional_data;
+    AdditionalData additional_data;
   };
 
 
@@ -651,6 +711,7 @@ namespace TrilinosWrappers
    * targeting deal.II data structures.
    */
   template <typename VectorType>
+  DEAL_II_CXX20_REQUIRES(concepts::is_vector_space_vector<VectorType>)
   class SolverBelos
   {
   public:
@@ -739,6 +800,7 @@ namespace TrilinosWrappers
      * https://docs.trilinos.org/latest-release/packages/belos/doc/html/classBelos_1_1MultiVec.html.
      */
     template <typename VectorType>
+    DEAL_II_CXX20_REQUIRES(concepts::is_vector_space_vector<VectorType>)
     class MultiVecWrapper
       : public Belos::MultiVec<typename VectorType::value_type>
     {
@@ -1145,7 +1207,7 @@ namespace TrilinosWrappers
                      Teuchos::SerialDenseMatrix<int, value_type> &,
                      const bool = false)
       {
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
       }
 
       virtual int
@@ -1153,7 +1215,7 @@ namespace TrilinosWrappers
         Teuchos::SerialDenseMatrix<int, value_type> &,
         const typename Teuchos::ScalarTraits<value_type>::magnitudeType &)
       {
-        Assert(false, ExcNotImplemented());
+        DEAL_II_NOT_IMPLEMENTED();
       }
 
 #      endif
@@ -1178,6 +1240,7 @@ namespace TrilinosWrappers
      * https://docs.trilinos.org/latest-release/packages/belos/doc/html/classBelos_1_1Operator.html.
      */
     template <typename OperatorType, typename VectorType>
+    DEAL_II_CXX20_REQUIRES(concepts::is_vector_space_vector<VectorType>)
     class OperatorWrapper
       : public Belos::Operator<typename VectorType::value_type>
     {
@@ -1247,6 +1310,7 @@ namespace TrilinosWrappers
 
 
   template <typename VectorType>
+  DEAL_II_CXX20_REQUIRES(concepts::is_vector_space_vector<VectorType>)
   SolverBelos<VectorType>::SolverBelos(
     SolverControl                              &solver_control,
     const AdditionalData                       &additional_data,
@@ -1259,12 +1323,12 @@ namespace TrilinosWrappers
 
 
   template <typename VectorType>
+  DEAL_II_CXX20_REQUIRES(concepts::is_vector_space_vector<VectorType>)
   template <typename OperatorType, typename PreconditionerType>
-  void
-  SolverBelos<VectorType>::solve(const OperatorType       &A_dealii,
-                                 VectorType               &x_dealii,
-                                 const VectorType         &b_dealii,
-                                 const PreconditionerType &P_dealii)
+  void SolverBelos<VectorType>::solve(const OperatorType       &A_dealii,
+                                      VectorType               &x_dealii,
+                                      const VectorType         &b_dealii,
+                                      const PreconditionerType &P_dealii)
   {
     using value_type = typename VectorType::value_type;
 

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2013 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/table.h>
@@ -83,6 +82,13 @@ namespace DoFTools
                  "locally owned one does not make sense."));
       }
 
+    const auto                 &fe_collection = dof.get_fe_collection();
+    std::vector<Table<2, bool>> fe_dof_mask(fe_collection.size());
+    for (unsigned int f = 0; f < fe_collection.size(); ++f)
+      {
+        fe_dof_mask[f] = fe_collection[f].get_local_dof_sparsity_pattern();
+      }
+
     std::vector<types::global_dof_index> dofs_on_this_cell;
     dofs_on_this_cell.reserve(dof.get_fe_collection().max_dofs_per_cell());
 
@@ -101,9 +107,16 @@ namespace DoFTools
           // make sparsity pattern for this cell. if no constraints pattern
           // was given, then the following call acts as if simply no
           // constraints existed
-          constraints.add_entries_local_to_global(dofs_on_this_cell,
-                                                  sparsity,
-                                                  keep_constrained_dofs);
+          const types::fe_index fe_index = cell->active_fe_index();
+          if (fe_dof_mask[fe_index].empty())
+            constraints.add_entries_local_to_global(dofs_on_this_cell,
+                                                    sparsity,
+                                                    keep_constrained_dofs);
+          else
+            constraints.add_entries_local_to_global(dofs_on_this_cell,
+                                                    sparsity,
+                                                    keep_constrained_dofs,
+                                                    fe_dof_mask[fe_index]);
         }
   }
 
@@ -153,6 +166,12 @@ namespace DoFTools
     const std::vector<Table<2, Coupling>> dof_mask //(fe_collection.size())
       = dof_couplings_from_component_couplings(fe_collection, couplings);
 
+    std::vector<Table<2, bool>> fe_dof_mask(fe_collection.size());
+    for (unsigned int f = 0; f < fe_collection.size(); ++f)
+      {
+        fe_dof_mask[f] = fe_collection[f].get_local_dof_sparsity_pattern();
+      }
+
     // Convert the dof_mask to bool_dof_mask so we can pass it
     // to constraints.add_entries_local_to_global()
     std::vector<Table<2, bool>> bool_dof_mask(fe_collection.size());
@@ -164,7 +183,8 @@ namespace DoFTools
         bool_dof_mask[f].fill(false);
         for (unsigned int i = 0; i < fe_collection[f].n_dofs_per_cell(); ++i)
           for (unsigned int j = 0; j < fe_collection[f].n_dofs_per_cell(); ++j)
-            if (dof_mask[f](i, j) != none)
+            if (dof_mask[f](i, j) != none &&
+                (fe_dof_mask[f].empty() || fe_dof_mask[f](i, j)))
               bool_dof_mask[f](i, j) = true;
       }
 

@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2021 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2021 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE.md at
- * the top level directory of deal.II.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Authors: Fabian Castelli, Karlsruhe Institute of Technology (KIT)
  */
@@ -152,7 +151,7 @@ namespace Step66
 
   // The constructor of the <code>JacobianOperator</code> just calls the
   // constructor of the base class MatrixFreeOperators::Base, which is itself
-  // derived from the Subscriptor class.
+  // derived from the EnableObserverPointer class.
   template <int dim, int fe_degree, typename number>
   JacobianOperator<dim, fe_degree, number>::JacobianOperator()
     : MatrixFreeOperators::Base<dim,
@@ -193,12 +192,24 @@ namespace Step66
   // <code>std::exp(newton_step[q])</code> and store these values in the table.
   // This skips all evaluations of the nonlinearity in each call of the
   // <code>vmult()</code> function.
+  //
+  // Note that we need to manually call the functions to exchange the ghost
+  // data here, by calling
+  // LinearAlgebra::distributed::Vector::update_ghost_values(), to ensure all
+  // data from neighboring processes is available for evaluating the
+  // finite-element interpolation on cells. In the other functions of this
+  // tutorial program, MatrixFree::cell_loop() made sure to call this
+  // function. Note that we clear the ghost state again at the end of the
+  // function, in order to avoid mixing ghosted and non-ghosted vectors in
+  // other parts of the solver.
   template <int dim, int fe_degree, typename number>
   void JacobianOperator<dim, fe_degree, number>::evaluate_newton_step(
     const LinearAlgebra::distributed::Vector<number> &newton_step)
   {
     const unsigned int n_cells = this->data->n_cell_batches();
     FECellIntegrator   phi(*this->data);
+
+    newton_step.update_ghost_values();
 
     nonlinear_values.reinit(n_cells, phi.n_q_points);
 
@@ -213,6 +224,7 @@ namespace Step66
             nonlinear_values(cell, q) = std::exp(phi.get_value(q));
           }
       }
+    newton_step.zero_out_ghost_values();
   }
 
 
@@ -411,7 +423,7 @@ namespace Step66
 
     // As usual we then define the Lagrangian finite elements FE_Q and a
     // DoFHandler.
-    FE_Q<dim>       fe;
+    const FE_Q<dim> fe;
     DoFHandler<dim> dof_handler;
 
 

@@ -1,17 +1,16 @@
-/* ---------------------------------------------------------------------
+/* ------------------------------------------------------------------------
  *
- * Copyright (C) 2018 - 2023 by the deal.II authors
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ * Copyright (C) 2019 - 2024 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
- * The deal.II library is free software; you can use it, redistribute
- * it, and/or modify it under the terms of the GNU Lesser General
- * Public License as published by the Free Software Foundation; either
- * version 2.1 of the License, or (at your option) any later version.
- * The full text of the license can be found in the file LICENSE at
- * the top level of the deal.II distribution.
+ * Part of the source code is dual licensed under Apache-2.0 WITH
+ * LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+ * governing the source code and code contributions can be found in
+ * LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
  *
- * ---------------------------------------------------------------------
+ * ------------------------------------------------------------------------
  *
  * Author: Daniel Garcia-Sanchez, CNRS, 2019
  */
@@ -97,7 +96,7 @@ namespace step62
     HDF5::Group data;
 
     // The simulation parameters are stored in `data` as HDF5 attributes. The
-    // following attributes are defined in the jupyter notebook, stored in
+    // following attributes are defined in the Jupyter Notebook, stored in
     // `data` as HDF5 attributes and then read by the constructor.
     const double     max_force_amplitude;
     const double     force_sigma_x;
@@ -128,8 +127,8 @@ namespace step62
     // HDF5::Group in which all the simulation results will be stored.
     HDF5::Group data;
 
-    // The same as before, the following attributes are defined in the jupyter
-    // notebook, stored in `data` as HDF5 attributes and then read by the
+    // The same as before, the following attributes are defined in the Jupyter
+    // Notebook, stored in `data` as HDF5 attributes and then read by the
     // constructor.
     const double pml_coeff;
     const int    pml_coeff_degree;
@@ -160,8 +159,8 @@ namespace step62
     // HDF5::Group in which all the simulation results will be stored.
     HDF5::Group data;
 
-    // The same as before, the following attributes are defined in the jupyter
-    // notebook, stored in `data` as HDF5 attributes and then read by the
+    // The same as before, the following attributes are defined in the Jupyter
+    // Notebook, stored in `data` as HDF5 attributes and then read by the
     // constructor.
     const double       lambda;
     const double       mu;
@@ -187,8 +186,8 @@ namespace step62
     // HDF5::Group in which all the simulation results will be stored.
     HDF5::Group data;
 
-    // The same as before, the following attributes are defined in the jupyter
-    // notebook, stored in `data` as HDF5 attributes and then read by the
+    // The same as before, the following attributes are defined in the Jupyter
+    // Notebook, stored in `data` as HDF5 attributes and then read by the
     // constructor.
     const std::string        simulation_name;
     const bool               save_vtu_files;
@@ -315,14 +314,14 @@ namespace step62
 
     parallel::distributed::Triangulation<dim> triangulation;
 
-    QGauss<dim> quadrature_formula;
+    const QGauss<dim> quadrature_formula;
 
     // We store the mass and stiffness matrices for each cell this vector.
     std::vector<QuadratureCache<dim>> quadrature_cache;
 
 
-    FESystem<dim>   fe;
-    DoFHandler<dim> dof_handler;
+    const FESystem<dim> fe;
+    DoFHandler<dim>     dof_handler;
 
     IndexSet locally_owned_dofs;
     IndexSet locally_relevant_dofs;
@@ -402,10 +401,11 @@ namespace step62
             std::abs(p[1] - force_center[1]) < max_force_width_y / 2)
           {
             return max_force_amplitude *
-                   std::exp(-(std::pow(p[0] - force_center[0], 2) /
-                                (2 * std::pow(force_sigma_x, 2)) +
-                              std::pow(p[1] - force_center[1], 2) /
-                                (2 * std::pow(force_sigma_y, 2))));
+                   std::exp(
+                     -(Utilities::fixed_power<2>(p[0] - force_center[0]) /
+                         (2 * Utilities::fixed_power<2>(force_sigma_x)) +
+                       Utilities::fixed_power<2>(p[1] - force_center[1]) /
+                         (2 * Utilities::fixed_power<2>(force_sigma_y))));
           }
         else
           {
@@ -424,8 +424,8 @@ namespace step62
 
   // As before, the constructor reads all the parameters from the HDF5::Group
   // `data` using the HDF5::Group::get_attribute() function. As we have
-  // discussed, a quadratic turn-on of the PML has been defined in the jupyter
-  // notebook. It is possible to use a linear, cubic or another power degree by
+  // discussed, a quadratic turn-on of the PML has been defined in the Jupyter
+  // Notebook. It is possible to use a linear, cubic or another power degree by
   // changing the parameter `pml_coeff_degree`. The parameters `pml_x` and
   // `pml_y` can be used to turn on and off the `x` and `y` PMLs.
   template <int dim>
@@ -545,9 +545,8 @@ namespace step62
         elastic_constant = mu * (3 * lambda + 2 * mu) / (lambda + mu);
       }
     else
-      {
-        Assert(false, ExcInternalError());
-      }
+      DEAL_II_NOT_IMPLEMENTED();
+
     const double material_a_speed_of_sound =
       std::sqrt(elastic_constant / material_a_rho);
     const double material_a_wavelength =
@@ -810,7 +809,7 @@ namespace step62
       n_q_points, Vector<std::complex<double>>(dim));
 
     // We calculate the stiffness tensor for the $\lambda$ and $\mu$ that have
-    // been defined in the jupyter notebook. Note that contrary to $\rho$ the
+    // been defined in the Jupyter Notebook. Note that contrary to $\rho$ the
     // stiffness is constant among for the whole domain.
     const SymmetricTensor<4, dim> stiffness_tensor =
       get_stiffness_tensor<dim>(parameters.lambda, parameters.mu);
@@ -967,7 +966,7 @@ namespace step62
                   for (unsigned int j = 0; j < dofs_per_cell; ++j)
                     {
                       std::complex<double> matrix_sum = 0;
-                      matrix_sum += -std::pow(omega, 2) *
+                      matrix_sum += -Utilities::fixed_power<2>(omega) *
                                     quadrature_data.mass_coefficient[i][j];
                       matrix_sum += quadrature_data.stiffness_coefficient[i][j];
                       cell_matrix(i, j) += matrix_sum * quadrature_data.JxW;
@@ -1462,12 +1461,12 @@ int main(int argc, char *argv[])
               group.get_attribute<double>("frequency_range") / 2);
           group.set_attribute<unsigned int>("nb_frequency_points", 400);
 
-          if (group_name == std::string("displacement"))
-            group.set_attribute<std::string>(
-              "simulation_name", std::string("phononic_cavity_displacement"));
+          if (group_name == "displacement")
+            group.set_attribute<std::string>("simulation_name",
+                                             "phononic_cavity_displacement");
           else
-            group.set_attribute<std::string>(
-              "simulation_name", std::string("phononic_cavity_calibration"));
+            group.set_attribute<std::string>("simulation_name",
+                                             "phononic_cavity_calibration");
 
           group.set_attribute<bool>("save_vtu_files", false);
         }

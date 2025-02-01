@@ -1,22 +1,23 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
+// SPDX-License-Identifier: LGPL-2.1-or-later
 // Copyright (C) 2020 - 2023 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/vectorization.h>
+
+#include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/sparsity_pattern.h>
@@ -1528,15 +1529,45 @@ namespace internal
     DoFInfo::memory_consumption() const
     {
       std::size_t memory = sizeof(*this);
+      for (const auto &storage : index_storage_variants)
+        memory += storage.capacity() * sizeof(storage[0]);
       memory +=
         (row_starts.capacity() * sizeof(std::pair<unsigned int, unsigned int>));
       memory += MemoryConsumption::memory_consumption(dof_indices);
+      memory += MemoryConsumption::memory_consumption(dof_indices_interleaved);
+      memory += MemoryConsumption::memory_consumption(dof_indices_contiguous);
+      memory +=
+        MemoryConsumption::memory_consumption(dof_indices_contiguous_sm);
+      memory +=
+        MemoryConsumption::memory_consumption(dof_indices_interleave_strides);
+      memory +=
+        MemoryConsumption::memory_consumption(n_vectorization_lanes_filled);
+      memory += MemoryConsumption::memory_consumption(
+        hanging_node_constraint_masks_comp);
       memory +=
         MemoryConsumption::memory_consumption(hanging_node_constraint_masks);
+      memory += MemoryConsumption::memory_consumption(constrained_dofs);
       memory += MemoryConsumption::memory_consumption(row_starts_plain_indices);
       memory += MemoryConsumption::memory_consumption(plain_dof_indices);
       memory += MemoryConsumption::memory_consumption(constraint_indicator);
       memory += MemoryConsumption::memory_consumption(*vector_partitioner);
+      memory += MemoryConsumption::memory_consumption(n_components);
+      memory += MemoryConsumption::memory_consumption(start_components);
+      memory += MemoryConsumption::memory_consumption(component_to_base_index);
+      memory +=
+        MemoryConsumption::memory_consumption(component_dof_indices_offset);
+      memory += MemoryConsumption::memory_consumption(dofs_per_cell);
+      memory += MemoryConsumption::memory_consumption(dofs_per_face);
+      memory += MemoryConsumption::memory_consumption(cell_active_fe_index);
+      memory += MemoryConsumption::memory_consumption(fe_index_conversion);
+      memory +=
+        MemoryConsumption::memory_consumption(vector_zero_range_list_index);
+      memory += MemoryConsumption::memory_consumption(vector_zero_range_list);
+      memory += MemoryConsumption::memory_consumption(cell_loop_pre_list_index);
+      memory += MemoryConsumption::memory_consumption(cell_loop_pre_list);
+      memory +=
+        MemoryConsumption::memory_consumption(cell_loop_post_list_index);
+      memory += MemoryConsumption::memory_consumption(cell_loop_post_list);
       return memory;
     }
   } // namespace MatrixFreeFunctions
@@ -1590,19 +1621,24 @@ namespace internal
 
     template void
     DoFInfo::compute_face_index_compression<1>(
-      const std::vector<FaceToCellTopology<1>> &);
+      const std::vector<FaceToCellTopology<1>> &,
+      bool);
     template void
     DoFInfo::compute_face_index_compression<2>(
-      const std::vector<FaceToCellTopology<2>> &);
+      const std::vector<FaceToCellTopology<2>> &,
+      bool);
     template void
     DoFInfo::compute_face_index_compression<4>(
-      const std::vector<FaceToCellTopology<4>> &);
+      const std::vector<FaceToCellTopology<4>> &,
+      bool);
     template void
     DoFInfo::compute_face_index_compression<8>(
-      const std::vector<FaceToCellTopology<8>> &);
+      const std::vector<FaceToCellTopology<8>> &,
+      bool);
     template void
     DoFInfo::compute_face_index_compression<16>(
-      const std::vector<FaceToCellTopology<16>> &);
+      const std::vector<FaceToCellTopology<16>> &,
+      bool);
 
     template void
     DoFInfo::compute_vector_zero_access_pattern<1>(

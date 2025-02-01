@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2004 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_tests_h
 #define dealii_tests_h
@@ -21,7 +20,6 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/bounding_box.h>
-#include <deal.II/base/cuda.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/job_identifier.h>
 #include <deal.II/base/logstream.h>
@@ -31,6 +29,8 @@
 #include <deal.II/base/point.h>
 #include <deal.II/base/thread_management.h>
 #include <deal.II/base/utilities.h>
+
+#include <deal.II/grid/cell_data.h>
 
 #include <cmath>
 #include <cstdlib>
@@ -42,6 +42,10 @@
 
 #if defined(DEBUG) && defined(DEAL_II_HAVE_FP_EXCEPTIONS)
 #  include <cfenv>
+#endif
+
+#if defined(DEAL_II_WITH_HDF5)
+#  include <hdf5.h>
 #endif
 
 
@@ -456,46 +460,72 @@ struct LimitConcurrency
 #ifdef DEAL_II_WITH_PETSC
 #  include <petscsys.h>
 
-namespace
+// PETSc 3.20 includes a new logging implementation which is much less reliant
+// on global state. At the same time the old version doesn't work any more so we
+// have to use it.
+//
+// This is based on src/sys/tutorials/ex7.c.
+#  if DEAL_II_PETSC_VERSION_GTE(3, 20, 0)
+// We need to modify the internal state of a PetscLogHandler to add our own
+// logging, so we need the internal header:
+#    include <petsc/private/loghandlerimpl.h>
+
+struct PETScReferenceCountContext
 {
-  void
-  check_petsc_allocations()
+  static PetscErrorCode
+  construct(PetscLogHandler handler)
   {
-    PetscStageLog  stageLog;
-    PetscErrorCode ierr;
+    handler->data               = new PETScReferenceCountContext();
+    handler->ops->destroy       = destruct;
+    handler->ops->objectcreate  = log_object_constructor;
+    handler->ops->objectdestroy = log_object_destructor;
 
-    ierr = PetscLogGetStageLog(&stageLog);
-    AssertThrow(ierr == 0, ExcPETScError(ierr));
-
-    // I don't quite understand petsc and it looks like
-    // stageLog->stageInfo->classLog->classInfo[i].id is always -1, so we look
-    // it up in stageLog->classLog, make sure it has the same number of entries:
-    Assert(stageLog->stageInfo->classLog->numClasses ==
-             stageLog->classLog->numClasses,
-           dealii::ExcInternalError());
-
-    bool errors = false;
-    for (int i = 0; i < stageLog->stageInfo->classLog->numClasses; ++i)
-      {
-        if (stageLog->stageInfo->classLog->classInfo[i].destructions !=
-            stageLog->stageInfo->classLog->classInfo[i].creations)
-          {
-            errors = true;
-            std::cerr
-              << "ERROR: PETSc objects leaking of type '"
-              << stageLog->classLog->classInfo[i].name << "'"
-              << " with "
-              << stageLog->stageInfo->classLog->classInfo[i].creations
-              << " creations and only "
-              << stageLog->stageInfo->classLog->classInfo[i].destructions
-              << " destructions." << std::endl;
-          }
-      }
-
-    if (errors)
-      throw dealii::ExcMessage("PETSc memory leak");
+    return PETSC_SUCCESS;
   }
-} // namespace
+
+
+
+  static PetscErrorCode
+  destruct(PetscLogHandler handler)
+  {
+    delete reinterpret_cast<PETScReferenceCountContext *>(handler->data);
+    return PETSC_SUCCESS;
+  }
+
+
+
+  static PetscErrorCode
+  log_object_constructor(PetscLogHandler handler, PetscObject obj)
+  {
+    const char    *classname = nullptr;
+    PetscErrorCode ierr      = PetscObjectGetClassName(obj, &classname);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    reinterpret_cast<PETScReferenceCountContext *>(handler->data)
+      ->ctor_dtor_map[classname]
+      .first += 1;
+    return PETSC_SUCCESS;
+  }
+
+
+
+  static PetscErrorCode
+  log_object_destructor(PetscLogHandler handler, PetscObject obj)
+  {
+    const char    *classname = nullptr;
+    PetscErrorCode ierr      = PetscObjectGetClassName(obj, &classname);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    reinterpret_cast<PETScReferenceCountContext *>(handler->data)
+      ->ctor_dtor_map[classname]
+      .second += 1;
+    return PETSC_SUCCESS;
+  }
+
+  // Map between the PETSc class name and the number of constructions /
+  // destructions
+  std::map<std::string, std::pair<PetscInt, PetscInt>> ctor_dtor_map;
+};
+
+#  endif
 #endif
 
 
@@ -581,6 +611,19 @@ struct MPILogInitAll
     deallog.depth_console(console ? 10 : 0);
 
     deallog.push(Utilities::int_to_string(myid));
+#ifdef DEAL_II_WITH_PETSC
+#  if DEAL_II_PETSC_VERSION_GTE(3, 20, 0)
+    PetscErrorCode ierr =
+      PetscLogHandlerRegister("MPILogInitAll",
+                              PETScReferenceCountContext::construct);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    ierr = PetscLogHandlerCreate(PETSC_COMM_WORLD, &petsc_log);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    ierr = PetscLogHandlerSetType(petsc_log, "MPILogInitAll");
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    ierr = PetscLogHandlerStart(petsc_log);
+#  endif
+#endif
   }
 
   ~MPILogInitAll()
@@ -601,10 +644,63 @@ struct MPILogInitAll
     MPI_Barrier(MPI_COMM_WORLD);
 
 #  ifdef DEAL_II_WITH_PETSC
-    check_petsc_allocations();
-    MPI_Barrier(MPI_COMM_WORLD);
+    bool leaks = false;
+#    if DEAL_II_PETSC_VERSION_GTE(3, 20, 0)
+    PetscErrorCode ierr = PetscLogHandlerStop(petsc_log);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+    auto *context =
+      reinterpret_cast<PETScReferenceCountContext *>(petsc_log->data);
+    for (const auto &pair : context->ctor_dtor_map)
+      if (pair.second.first != pair.second.second)
+        {
+          leaks = true;
+          std::cerr << "ERROR: PETSc objects leaking of type '" << pair.first
+                    << "'"
+                    << " with " << pair.second.first << " creations and only "
+                    << pair.second.second << " destructions." << std::endl;
+        }
+    ierr = PetscLogHandlerDestroy(&petsc_log);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+#    else
+    PetscStageLog  stageLog;
+    PetscErrorCode ierr;
+
+    ierr = PetscLogGetStageLog(&stageLog);
+    AssertThrow(ierr == 0, ExcPETScError(ierr));
+
+    // I don't quite understand petsc and it looks like
+    // stageLog->stageInfo->classLog->classInfo[i].id is always -1, so we look
+    // it up in stageLog->classLog, make sure it has the same number of
+    // entries:
+    Assert(stageLog->stageInfo->classLog->numClasses ==
+             stageLog->classLog->numClasses,
+           dealii::ExcInternalError());
+
+    for (int i = 0; i < stageLog->stageInfo->classLog->numClasses; ++i)
+      {
+        if (stageLog->stageInfo->classLog->classInfo[i].destructions !=
+            stageLog->stageInfo->classLog->classInfo[i].creations)
+          {
+            leaks = true;
+            std::cerr
+              << "ERROR: PETSc objects leaking of type '"
+              << stageLog->classLog->classInfo[i].name << "'"
+              << " with "
+              << stageLog->stageInfo->classLog->classInfo[i].creations
+              << " creations and only "
+              << stageLog->stageInfo->classLog->classInfo[i].destructions
+              << " destructions." << std::endl;
+          }
+      }
+#    endif
+
+    // The test should fail if there are PETSc leaks, so abort at this point and
+    // don't write any combined output.
+    if (leaks)
+      std::abort();
 #  endif
 
+    MPI_Barrier(MPI_COMM_WORLD);
     if (myid == 0)
       {
         for (unsigned int i = 1; i < nproc; ++i)
@@ -616,61 +712,13 @@ struct MPILogInitAll
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
   }
-};
 
-
-#ifdef DEAL_II_WITH_CUDA
-// By default, all the ranks will try to access the device 0.
-// If we are running with MPI support it is better to address different graphic
-// cards for different processes even if only one node is used. The choice below
-// is based on the MPI process id.
-// MPI needs to be initialized before using this function.
-void
-init_cuda(const bool use_mpi = false)
-{
-#  ifndef DEAL_II_WITH_MPI
-  Assert(use_mpi == false, ExcInternalError());
+#ifdef DEAL_II_WITH_PETSC
+#  if DEAL_II_PETSC_VERSION_GTE(3, 20, 0)
+  PetscLogHandler petsc_log;
 #  endif
-  const unsigned int my_id =
-    use_mpi ? Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) : 0;
-  int         n_devices       = 0;
-  cudaError_t cuda_error_code = cudaGetDeviceCount(&n_devices);
-  AssertCuda(cuda_error_code);
-  const int device_id = my_id % n_devices;
-  cuda_error_code     = cudaSetDevice(device_id);
-  AssertCuda(cuda_error_code);
-
-  // In principle, we should be able to distribute the load better by
-  // choosing a random graphics card. For some reason, this produces timeouts
-  // on the tester we use mainly for the CUDA tests so we don't use the
-  // following optimization by default.
-
-  /*
-  # ifndef DEAL_II_WITH_MPI
-    Assert(use_mpi == false, ExcInternalError());
-  #  endif
-    const unsigned int my_id =
-      use_mpi ? Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) : 0;
-    int         device_id       = 0;
-    int         n_devices       = 0;
-    cudaError_t cuda_error_code = cudaGetDeviceCount(&n_devices);
-    AssertCuda(cuda_error_code);
-    if (my_id == 0)
-      {
-        Testing::srand(std::time(nullptr));
-        device_id = Testing::rand() % n_devices;
-      }
-  #  ifdef DEAL_II_WITH_MPI
-    if (use_mpi)
-      MPI_Bcast(&device_id, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  #  endif
-    device_id       = (device_id + my_id) % n_devices;
-    cuda_error_code = cudaSetDevice(device_id);
-    AssertCuda(cuda_error_code);
-  */
-}
 #endif
-
+};
 
 
 /* Override the tbb assertion handler in order to print a stacktrace:*/
@@ -749,6 +797,15 @@ struct EnableFPE
   EnableFPE()
   {
 #if defined(DEBUG) && defined(DEAL_II_HAVE_FP_EXCEPTIONS)
+#  if defined(DEAL_II_WITH_HDF5)
+    // Modern versions of HDF5 detect the floating-point environment by
+    // performing several operations which trigger floating-point exceptions.
+    // Hence we need to set up HDF5's global state before calling
+    // feenableexcept().
+    const int ierr = H5open();
+    AssertThrow(ierr == 0, ExcInternalError());
+    feclearexcept(FE_ALL_EXCEPT);
+#  endif
     // enable floating point exceptions
     feenableexcept(FE_DIVBYZERO | FE_INVALID);
 #endif

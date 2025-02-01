@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 message(STATUS "Setting up library")
 
@@ -47,8 +46,8 @@ set(CMAKE_INCLUDE_CURRENT_DIR true)
 # compile jobs come first so that 'make -j N' saturates many processors also
 # towards the end of compiling rather than having to wait for one long
 # compilation that, because it has been listed last, is started towards the
-# end of everything (e.g. numerics/vectors.cc takes several minutes to
-# compile...)
+# end of everything (e.g. some of the numerics/vector_tools_*.cc files can
+# take quite a long time to compile).
 #
 add_subdirectory(numerics)
 add_subdirectory(fe)
@@ -94,6 +93,7 @@ foreach(build ${DEAL_II_BUILD_TYPES})
   elseif("${build}" MATCHES "RELEASE")
     set(build_camelcase "Release")
   endif()
+
 
   #
   # Combine all ${build} OBJECT targets to a ${build} library:
@@ -191,39 +191,20 @@ foreach(build ${DEAL_II_BUILD_TYPES})
       )
   endif()
 
+  if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.30")
+    #
+    # Create alias targets "dealii::dealii_release" and "dealii::dealii_debug"
+    # to have the exported target names available when populating the link
+    # interface for our "dealii::dealii" convenience target:
+    #
+    add_library(${DEAL_II_TARGET_NAME}::${DEAL_II_TARGET_NAME}_${build_lowercase}
+      ALIAS ${DEAL_II_TARGET_NAME}_${build_lowercase}
+      )
+  endif()
+
   target_link_libraries(${DEAL_II_TARGET_NAME} INTERFACE
     "$<$<CONFIG:${build_camelcase}>:${DEAL_II_TARGET_NAME}::${DEAL_II_TARGET_NAME}_${build_lowercase}>"
     )
 endforeach()
-
-#
-# And install all targets:
-#
-
-set(_targets ${DEAL_II_TARGET_NAME})
-foreach(build ${DEAL_II_BUILD_TYPES})
-  string(TOLOWER ${build} build_lowercase)
-  list(APPEND _targets ${DEAL_II_TARGET_NAME}_${build_lowercase})
-endforeach()
-
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${DEAL_II_PROJECT_CONFIG_RELDIR})
-export(TARGETS ${_targets} ${DEAL_II_TARGETS} ${DEAL_II_TARGETS_DEBUG} ${DEAL_II_TARGETS_RELEASE}
-  NAMESPACE "${DEAL_II_TARGET_NAME}::"
-  FILE ${CMAKE_BINARY_DIR}/${DEAL_II_PROJECT_CONFIG_RELDIR}/${DEAL_II_PROJECT_CONFIG_NAME}Targets.cmake
-)
-
-install(TARGETS ${_targets} ${DEAL_II_TARGETS} ${DEAL_II_TARGETS_DEBUG} ${DEAL_II_TARGETS_RELEASE}
-  COMPONENT library
-  EXPORT ${DEAL_II_PROJECT_CONFIG_NAME}Targets
-  RUNTIME DESTINATION ${DEAL_II_EXECUTABLE_RELDIR}
-  LIBRARY DESTINATION ${DEAL_II_LIBRARY_RELDIR}
-  ARCHIVE DESTINATION ${DEAL_II_LIBRARY_RELDIR}
-  )
-
-install(EXPORT ${DEAL_II_PROJECT_CONFIG_NAME}Targets
-  NAMESPACE "${DEAL_II_TARGET_NAME}::"
-  DESTINATION ${DEAL_II_PROJECT_CONFIG_RELDIR}
-  COMPONENT library
-  )
 
 message(STATUS "Setting up library - Done")

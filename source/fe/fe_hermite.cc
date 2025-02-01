@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2023 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2023 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
 
@@ -65,6 +64,8 @@ namespace internal
   inline unsigned int
   get_regularity_from_degree(const unsigned int fe_degree)
   {
+    Assert(fe_degree % 2 == 1,
+           ExcMessage("FE_Hermite only supports odd polynomial degrees."));
     return (fe_degree == 0) ? 0 : (fe_degree - 1) / 2;
   }
 
@@ -248,8 +249,7 @@ namespace internal
       const typename Mapping<1, spacedim>::InternalDataBase &mapping_data,
       Table<2, Number>                                      &value_list)
     {
-      unsigned int n_q_points;
-      double       cell_extent = 1.0;
+      double cell_extent = 1.0;
 
       // Check mapping_data is associated with a compatible mapping class
       if (dynamic_cast<const typename MappingCartesian<1>::InternalData *>(
@@ -258,11 +258,10 @@ namespace internal
           const typename MappingCartesian<1>::InternalData *data =
             dynamic_cast<const typename MappingCartesian<1>::InternalData *>(
               &mapping_data);
-          n_q_points  = data->quadrature_points.size();
           cell_extent = data->cell_extents[0];
         }
       else
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
 
       const unsigned int regularity      = fe_herm.get_regularity();
       const unsigned int n_dofs_per_cell = fe_herm.n_dofs_per_cell();
@@ -271,8 +270,6 @@ namespace internal
 
       AssertDimension(value_list.size(0), n_dofs_per_cell);
       AssertDimension(n_dofs_per_cell, 2 * regularity + 2);
-      AssertIndexRange(n_q_points_out, n_q_points + 1);
-      (void)n_q_points;
 
       std::vector<unsigned int> l2h =
         hermite_lexicographic_to_hierarchic_numbering<1>(regularity);
@@ -307,7 +304,6 @@ namespace internal
       const typename Mapping<2, spacedim>::InternalDataBase &mapping_data,
       Table<2, Number>                                      &value_list)
     {
-      unsigned int n_q_points;
       Tensor<1, 2> cell_extents;
 
       // Check mapping_data is associated with a compatible mapping class
@@ -317,11 +313,10 @@ namespace internal
           const typename MappingCartesian<2>::InternalData *data =
             dynamic_cast<const typename MappingCartesian<2>::InternalData *>(
               &mapping_data);
-          n_q_points   = data->quadrature_points.size();
           cell_extents = data->cell_extents;
         }
       else
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
 
       const unsigned int regularity      = fe_herm.get_regularity();
       const unsigned int n_dofs_per_cell = fe_herm.n_dofs_per_cell();
@@ -331,8 +326,6 @@ namespace internal
 
       AssertDimension(value_list.size(0), n_dofs_per_cell);
       AssertDimension(n_dofs_per_dim * n_dofs_per_dim, n_dofs_per_cell);
-      AssertIndexRange(n_q_points_out, n_q_points + 1);
-      (void)n_q_points;
 
       std::vector<unsigned int> l2h =
         hermite_lexicographic_to_hierarchic_numbering<2>(regularity);
@@ -381,7 +374,6 @@ namespace internal
       const typename Mapping<3, spacedim>::InternalDataBase &mapping_data,
       Table<2, Number>                                      &value_list)
     {
-      unsigned int n_q_points;
       Tensor<1, 3> cell_extents;
 
       // Check mapping_data is associated with a compatible mapping class
@@ -391,11 +383,10 @@ namespace internal
           const typename MappingCartesian<3>::InternalData *data =
             dynamic_cast<const typename MappingCartesian<3>::InternalData *>(
               &mapping_data);
-          n_q_points   = data->quadrature_points.size();
           cell_extents = data->cell_extents;
         }
       else
-        Assert(false, ExcInternalError());
+        DEAL_II_ASSERT_UNREACHABLE();
 
       const unsigned int regularity      = fe_herm.get_regularity();
       const unsigned int n_dofs_per_cell = fe_herm.n_dofs_per_cell();
@@ -406,8 +397,6 @@ namespace internal
 
       AssertDimension(value_list.size(0), n_dofs_per_cell);
       AssertDimension(Utilities::pow(n_dofs_per_dim, 3), n_dofs_per_cell);
-      AssertIndexRange(n_q_points_out, n_q_points + 1);
-      (void)n_q_points;
 
       std::vector<unsigned int> l2h =
         hermite_lexicographic_to_hierarchic_numbering<3>(regularity);
@@ -511,8 +500,8 @@ std::string
 FE_Hermite<dim, spacedim>::get_name() const
 {
   std::ostringstream name_buffer;
-  name_buffer << "FE_Hermite<" << dim << "," << spacedim << ">(" << this->degree
-              << ")";
+  name_buffer << "FE_Hermite<" << Utilities::dim_string(dim, spacedim) << ">("
+              << this->degree << ")";
   return name_buffer.str();
 }
 
@@ -584,12 +573,12 @@ FE_Hermite<dim, spacedim>::hp_vertex_dof_identities(
   else if (const FE_Hermite<dim, spacedim> *fe_herm_other =
              dynamic_cast<const FE_Hermite<dim, spacedim> *>(&fe_other))
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return {};
     }
   else
     {
-      Assert(false, ExcNotImplemented());
+      DEAL_II_NOT_IMPLEMENTED();
       return {};
     }
 }
@@ -733,7 +722,7 @@ FE_Hermite<dim, spacedim>::compare_for_domination(
         return FiniteElementDomination::no_requirements;
     }
 
-  Assert(false, ExcNotImplemented());
+  DEAL_II_NOT_IMPLEMENTED();
   return FiniteElementDomination::neither_element_dominates;
 }
 
@@ -888,9 +877,7 @@ FE_Hermite<dim, spacedim>::fill_fe_face_values(
     QProjector<dim>::DataSetDescriptor::face(
       ReferenceCells::get_hypercube<dim>(),
       face_no,
-      cell->face_orientation(face_no),
-      cell->face_flip(face_no),
-      cell->face_rotation(face_no),
+      cell->combined_face_orientation(face_no),
       quadrature[0].size());
 
   const UpdateFlags flags(fe_data.update_each);

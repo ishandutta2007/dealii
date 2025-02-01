@@ -1,17 +1,16 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 set(_unity_include_src
   affine_constraints.cc
@@ -33,6 +32,7 @@ set(_unity_include_src
   read_write_vector.cc
   solver.cc
   solver_control.cc
+  solver_gmres.cc
   sparse_decomposition.cc
   sparse_direct.cc
   sparse_ilu.cc
@@ -58,14 +58,6 @@ set(_separate_src
   utilities.cc
   )
 
-# Add CUDA wrapper files
-if(DEAL_II_WITH_CUDA)
-  set(_separate_src
-    ${_separate_src}
-    vector_memory_cuda.cc
-    )
-endif()
-
 set(_inst
   affine_constraints.inst.in
   block_sparse_matrix.inst.in
@@ -81,6 +73,7 @@ set(_inst
   read_write_vector.inst.in
   scalapack.inst.in
   solver.inst.in
+  solver_gmres.inst.in
   sparse_matrix_ez.inst.in
   sparse_matrix.inst.in
   tensor_product_matrix.inst.in
@@ -143,7 +136,13 @@ if(DEAL_II_WITH_TRILINOS)
     trilinos_solver.cc
     trilinos_sparse_matrix.cc
     trilinos_sparsity_pattern.cc
+    trilinos_tpetra_block_vector.cc
+    trilinos_tpetra_block_sparse_matrix.cc
     trilinos_tpetra_communication_pattern.cc
+    trilinos_tpetra_precondition.cc
+    trilinos_tpetra_solver_direct.cc
+    trilinos_tpetra_sparse_matrix.cc
+    trilinos_tpetra_sparsity_pattern.cc
     trilinos_tpetra_vector.cc
     trilinos_vector.cc
   )
@@ -157,19 +156,6 @@ if(DEAL_II_WITH_TRILINOS)
     ${_inst}
     trilinos_sparse_matrix.inst.in
     trilinos_vector.inst.in
-  )
-endif()
-
-# Add CUDA wrapper files
-if(DEAL_II_WITH_CUDA)
-  set(_separate_src
-    ${_separate_src}
-    cuda_kernels.cc
-    cuda_precondition.cc
-    cuda_solver_direct.cc
-    cuda_sparse_matrix.cc
-    cuda_vector.cc
-    read_write_vector_cuda.cc
   )
 endif()
 

@@ -1,23 +1,38 @@
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2023 by the deal.II authors
+## SPDX-License-Identifier: LGPL-2.1-or-later
+## Copyright (C) 2012 - 2024 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
-## The deal.II library is free software; you can use it, redistribute
-## it, and/or modify it under the terms of the GNU Lesser General
-## Public License as published by the Free Software Foundation; either
-## version 2.1 of the License, or (at your option) any later version.
-## The full text of the license can be found in the file LICENSE.md at
-## the top level directory of deal.II.
+## Part of the source code is dual licensed under Apache-2.0 WITH
+## LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+## governing the source code and code contributions can be found in
+## LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 ##
-## ---------------------------------------------------------------------
+## ------------------------------------------------------------------------
 
 #
 # Compile and install enabled bundled features:
 #
 
 message(STATUS "Setting up bundled features")
+
+#
+# If we install any bundled software also install the README.md file into
+# the bundled header directory. First of all, this ensures that we always
+# have a disclaimer in place explaining where the header files come from.
+# Secondly, in rare circumstances we might end up not installing any header
+# (because they are only used internally). Because this is quite tricky to
+# figure out when setting up targets we work around this issue by simply
+# always installing something into the bundled header directory.
+#
+if(NOT "${DEAL_II_BUNDLED_INCLUDE_DIRS}" STREQUAL "")
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md
+    DESTINATION ${DEAL_II_INCLUDE_RELDIR}/deal.II/bundled
+    COMPONENT library
+    )
+endif()
 
 if(DEAL_II_FEATURE_BOOST_BUNDLED_CONFIGURED)
   add_subdirectory(${BOOST_FOLDER}/libs/serialization/src)
@@ -55,7 +70,7 @@ endif()
 
 
 if(DEAL_II_FEATURE_TASKFLOW_BUNDLED_CONFIGURED)
-  install(DIRECTORY ${TASKFLOW_FOLDER}/include/taskflow
+  install(DIRECTORY ${TASKFLOW_FOLDER}/taskflow
     DESTINATION ${DEAL_II_INCLUDE_RELDIR}/deal.II/bundled
     COMPONENT library
     )

@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2014 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 
 #ifndef dealii_aligned_vector_h
@@ -80,6 +79,21 @@ public:
   AlignedVector();
 
   /**
+   * Range constructor.
+   *
+   * @note Unlike std::vector, this constructor uses random-access iterators so
+   * that the copy may be parallelized.
+   *
+   * @dealiiOperationIsMultithreaded
+   */
+  template <
+    typename RandomAccessIterator,
+    typename = std::enable_if_t<std::is_convertible_v<
+      typename std::iterator_traits<RandomAccessIterator>::iterator_category,
+      std::random_access_iterator_tag>>>
+  AlignedVector(RandomAccessIterator begin, RandomAccessIterator end);
+
+  /**
    * Set the vector size to the given size and initializes all elements with
    * T().
    *
@@ -120,23 +134,20 @@ public:
   operator=(AlignedVector<T> &&vec) noexcept;
 
   /**
-   * Change the size of the vector. If the new size is larger than the
-   * previous size, then new elements will be added to the end of the
-   * vector; these elements will remain uninitialized (i.e., left in
-   * an undefined state) if `std::is_trivial<T>` is `true`, and
-   * will be default initialized if `std::is_trivial<T>` is `false`.
-   * See [here](https://en.cppreference.com/w/cpp/types/is_trivial) for
-   * a definition of what `std::is_trivial` does.
+   * Change the size of the vector. If the new size is larger than the previous
+   * size, then new elements will be added to the end of the vector; these
+   * elements will remain uninitialized (i.e., left in an undefined state) if
+   * `std::is_trivially_default_constructible_v<T>` is `true`, and will be
+   * default initialized if that type trait is `false`. See
+   * [here](https://en.cppreference.com/w/cpp/types/is_default_constructible)
+   * for a precise definition of `std::is_trivially_default_constructible`.
    *
-   * If the new size is less than the previous size, then the last few
-   * elements will be destroyed if `std::is_trivial<T>` will be `false`
-   * or will simply be ignored in the future if
-   * `std::is_trivial<T>` is `true`.
+   * If the new size is less than the previous size, then the `new_size`th and
+   * all subsequent elements will be destroyed.
    *
-   * As a consequence of the outline above, the "_fast" suffix of this
-   * function refers to the fact that for "trivial" classes `T`, this
-   * function omits constructor/destructor calls and in particular the
-   * initialization of new elements.
+   * As a consequence of the outline above, the "_fast" suffix of this function
+   * refers to the fact that for trivially default constructible types `T`, this
+   * function omits the initialization of new elements.
    *
    * @note This method can only be invoked for classes @p T that define a
    * default constructor, @p T(). Otherwise, compilation will fail.
@@ -240,6 +251,24 @@ public:
   template <typename ForwardIterator>
   void
   insert_back(ForwardIterator begin, ForwardIterator end);
+
+  /**
+   * Insert the range specified by @p begin and @p end after the element @p position.
+   *
+   * @note Unlike std::vector, this function uses random-access iterators so
+   * that the copy may be parallelized.
+   *
+   * @dealiiOperationIsMultithreaded
+   */
+  template <
+    typename RandomAccessIterator,
+    typename = std::enable_if_t<std::is_convertible_v<
+      typename std::iterator_traits<RandomAccessIterator>::iterator_category,
+      std::random_access_iterator_tag>>>
+  iterator
+  insert(const_iterator       position,
+         RandomAccessIterator begin,
+         RandomAccessIterator end);
 
   /**
    * Fills the vector with size() copies of a default constructed object.
@@ -359,7 +388,7 @@ public:
    * Swaps the given vector with the calling vector.
    */
   void
-  swap(AlignedVector<T> &vec);
+  swap(AlignedVector<T> &vec) noexcept;
 
   /**
    * Return whether the vector is empty, i.e., its size is zero.
@@ -744,7 +773,7 @@ namespace internal
    *
    * @relatesalso AlignedVector
    */
-  template <typename T>
+  template <typename RandomAccessIterator, typename T>
   class AlignedVectorCopyConstruct
     : private dealii::parallel::ParallelForInteger
   {
@@ -761,9 +790,9 @@ namespace internal
      * The elements from the source array are simply copied via the placement
      * new copy constructor.
      */
-    AlignedVectorCopyConstruct(const T *const source_begin,
-                               const T *const source_end,
-                               T *const       destination)
+    AlignedVectorCopyConstruct(RandomAccessIterator source_begin,
+                               RandomAccessIterator source_end,
+                               T *const             destination)
       : source_(source_begin)
       , destination_(destination)
     {
@@ -788,22 +817,21 @@ namespace internal
       if (end == begin)
         return;
 
-      // for classes trivial assignment can use memcpy. cast element to
-      // (void*) to silence compiler warning for virtual classes (they will
-      // never arrive here because they are non-trivial).
-
-      if (std::is_trivial_v<T> == true)
-        std::memcpy(static_cast<void *>(destination_ + begin),
-                    static_cast<const void *>(source_ + begin),
+      // We can use memcpy() with trivially copyable objects.
+      if constexpr (std::is_trivially_copyable_v<T> == true &&
+                    (std::is_same_v<T *, RandomAccessIterator> ||
+                     std::is_same_v<const T *, RandomAccessIterator>) == true)
+        std::memcpy(destination_ + begin,
+                    source_ + begin,
                     (end - begin) * sizeof(T));
       else
         for (std::size_t i = begin; i < end; ++i)
-          new (&destination_[i]) T(source_[i]);
+          new (&destination_[i]) T(*(source_ + i));
     }
 
   private:
-    const T *const source_;
-    T *const       destination_;
+    RandomAccessIterator source_;
+    T *const             destination_;
   };
 
 
@@ -813,7 +841,7 @@ namespace internal
    *
    * @relatesalso AlignedVector
    */
-  template <typename T>
+  template <typename RandomAccessIterator, typename T>
   class AlignedVectorMoveConstruct
     : private dealii::parallel::ParallelForInteger
   {
@@ -830,9 +858,9 @@ namespace internal
      * The data is moved between the two arrays by invoking the destructor on
      * the source range (preparing for a subsequent call to free).
      */
-    AlignedVectorMoveConstruct(T *const source_begin,
-                               T *const source_end,
-                               T *const destination)
+    AlignedVectorMoveConstruct(RandomAccessIterator source_begin,
+                               RandomAccessIterator source_end,
+                               T *const             destination)
       : source_(source_begin)
       , destination_(destination)
     {
@@ -857,23 +885,23 @@ namespace internal
       if (end == begin)
         return;
 
-      // Classes with trivial assignment can use memcpy. cast element to
-      // (void*) to silence compiler warning for virtual classes (they will
-      // never arrive here because they are non-trivial).
-      if (std::is_trivial_v<T> == true)
-        std::memcpy(static_cast<void *>(destination_ + begin),
-                    static_cast<void *>(source_ + begin),
+      // We can use memcpy() with trivially copyable objects.
+      if constexpr (std::is_trivially_copyable_v<T> == true &&
+                    (std::is_same_v<T *, RandomAccessIterator> ||
+                     std::is_same_v<const T *, RandomAccessIterator>) == true)
+        std::memcpy(destination_ + begin,
+                    source_ + begin,
                     (end - begin) * sizeof(T));
       else
         // For everything else just use the move constructor. The original
         // object remains alive and will be destroyed elsewhere.
         for (std::size_t i = begin; i < end; ++i)
-          new (&destination_[i]) T(std::move(source_[i]));
+          new (&destination_[i]) T(std::move(*(source_ + i)));
     }
 
   private:
-    T *const source_;
-    T *const destination_;
+    RandomAccessIterator source_;
+    T *const             destination_;
   };
 
 
@@ -916,19 +944,14 @@ namespace internal
         return;
       Assert(destination != nullptr, ExcInternalError());
 
-      // do not use memcmp for long double because on some systems it does not
-      // completely fill its memory and may lead to false positives in
-      // e.g. valgrind
-      if (std::is_trivial_v<T> == true &&
-          std::is_same_v<T, long double> == false)
+      // do not use memcmp() for long double because on some systems it does not
+      // completely fill its memory and may lead to false positives in e.g.
+      // valgrind
+      if constexpr (std::is_trivially_default_constructible_v<T> == true &&
+                    std::is_same_v<T, long double> == false)
         {
           const unsigned char zero[sizeof(T)] = {};
-          // cast element to (void*) to silence compiler warning for virtual
-          // classes (they will never arrive here because they are
-          // non-trivial).
-          if (std::memcmp(zero,
-                          static_cast<const void *>(&element),
-                          sizeof(T)) == 0)
+          if (std::memcmp(zero, &element, sizeof(T)) == 0)
             trivial_element = true;
         }
       if (size < minimum_parallel_grain_size)
@@ -944,18 +967,18 @@ namespace internal
     apply_to_subrange(const std::size_t begin,
                       const std::size_t end) const override
     {
-      // for classes with trivial assignment of zero can use memset. cast
-      // element to (void*) to silence compiler warning for virtual
-      // classes (they will never arrive here because they are
-      // non-trivial).
-      if (std::is_trivial_v<T> == true && trivial_element)
-        std::memset(static_cast<void *>(destination_ + begin),
-                    0,
-                    (end - begin) * sizeof(T));
-      else
-        copy_construct_or_assign(begin,
-                                 end,
-                                 std::bool_constant<initialize_memory>());
+      // Only use memset() with types whose default constructors don't do
+      // anything.
+      if constexpr (std::is_trivially_default_constructible_v<T> == true)
+        if (trivial_element)
+          {
+            std::memset(destination_ + begin, 0, (end - begin) * sizeof(T));
+            return;
+          }
+
+      copy_construct_or_assign(begin,
+                               end,
+                               std::bool_constant<initialize_memory>());
     }
 
   private:
@@ -1030,14 +1053,10 @@ namespace internal
     apply_to_subrange(const std::size_t begin,
                       const std::size_t end) const override
     {
-      // for classes with trivial assignment of zero can use memset. cast
-      // element to (void*) to silence compiler warning for virtual
-      // classes (they will never arrive here because they are
-      // non-trivial).
-      if (std::is_trivial_v<T> == true)
-        std::memset(static_cast<void *>(destination_ + begin),
-                    0,
-                    (end - begin) * sizeof(T));
+      // Only use memset() with types whose default constructors don't do
+      // anything.
+      if constexpr (std::is_trivially_default_constructible_v<T> == true)
+        std::memset(destination_ + begin, 0, (end - begin) * sizeof(T));
       else
         default_construct_or_assign(begin,
                                     end,
@@ -1113,7 +1132,7 @@ AlignedVector<T>::Deleter::operator()(T *ptr)
           Assert(owning_aligned_vector->used_elements_end != nullptr,
                  ExcInternalError());
 
-          if (std::is_trivial_v<T> == false)
+          if (std::is_trivially_destructible_v<T> == false)
             for (T *p = owning_aligned_vector->used_elements_end - 1; p >= ptr;
                  --p)
               p->~T();
@@ -1170,7 +1189,7 @@ AlignedVector<T>::Deleter::MPISharedMemDeleterAction::delete_array(
   // it, not unique_ptr) so it is still set to its correct value.
 
   if (is_shmem_root)
-    if (std::is_trivial_v<T> == false)
+    if (std::is_trivially_destructible_v<T> == false)
       for (T *p = aligned_vector->used_elements_end - 1; p >= ptr; --p)
         p->~T();
 
@@ -1189,11 +1208,26 @@ inline AlignedVector<T>::AlignedVector()
   : elements(nullptr, Deleter(this))
   , used_elements_end(nullptr)
   , allocated_elements_end(nullptr)
-#  ifdef DEBUG
   , replicated_across_communicator(false)
-#  endif
 {}
 
+
+
+template <class T>
+template <typename RandomAccessIterator, typename>
+inline AlignedVector<T>::AlignedVector(RandomAccessIterator begin,
+                                       RandomAccessIterator end)
+  : elements(nullptr, Deleter(this))
+  , used_elements_end(nullptr)
+  , allocated_elements_end(nullptr)
+  , replicated_across_communicator(false)
+{
+  allocate_and_move(0u, end - begin, end - begin);
+  used_elements_end = allocated_elements_end;
+  dealii::internal::AlignedVectorCopyConstruct<RandomAccessIterator, T>(begin,
+                                                                        end,
+                                                                        data());
+}
 
 
 template <class T>
@@ -1201,9 +1235,7 @@ inline AlignedVector<T>::AlignedVector(const size_type size, const T &init)
   : elements(nullptr, Deleter(this))
   , used_elements_end(nullptr)
   , allocated_elements_end(nullptr)
-#  ifdef DEBUG
   , replicated_across_communicator(false)
-#  endif
 {
   if (size > 0)
     resize(size, init);
@@ -1216,16 +1248,14 @@ inline AlignedVector<T>::AlignedVector(const AlignedVector<T> &vec)
   : elements(nullptr, Deleter(this))
   , used_elements_end(nullptr)
   , allocated_elements_end(nullptr)
-#  ifdef DEBUG
   , replicated_across_communicator(false)
-#  endif
 {
   // copy the data from vec
   reserve(vec.size());
   used_elements_end = allocated_elements_end;
-  internal::AlignedVectorCopyConstruct<T>(vec.elements.get(),
-                                          vec.used_elements_end,
-                                          elements.get());
+  internal::AlignedVectorCopyConstruct<T *, T>(vec.elements.get(),
+                                               vec.used_elements_end,
+                                               elements.get());
 }
 
 
@@ -1253,9 +1283,9 @@ AlignedVector<T>::operator=(const AlignedVector<T> &vec)
 
   // Then copy the elements over by using the copy constructor on these
   // elements:
-  internal::AlignedVectorCopyConstruct<T>(vec.elements.get(),
-                                          vec.used_elements_end,
-                                          elements.get());
+  internal::AlignedVectorCopyConstruct<T *, T>(vec.elements.get(),
+                                               vec.used_elements_end,
+                                               elements.get());
 
   // Finally adjust the pointer to the end of the elements that are used:
   used_elements_end = elements.get() + new_size;
@@ -1308,7 +1338,7 @@ AlignedVector<T>::resize_fast(const size_type new_size)
       // call destructor on fields that are released, if the type requires it.
       // doing it backward releases the elements in reverse order as compared to
       // how they were created
-      if (std::is_trivial_v<T> == false)
+      if (std::is_trivially_destructible_v<T> == false)
         for (T *p = used_elements_end - 1; p >= elements.get() + new_size; --p)
           p->~T();
       used_elements_end = elements.get() + new_size;
@@ -1319,9 +1349,9 @@ AlignedVector<T>::resize_fast(const size_type new_size)
       reserve(new_size);
       used_elements_end = elements.get() + new_size;
 
-      // need to still set the values in case the class is non-trivial because
-      // virtual classes etc. need to run their (default) constructor
-      if (std::is_trivial_v<T> == false)
+      // Leave the new array entries as-is (with undefined values) unless T's
+      // default constructor is nontrivial (i.e., it is not a no-op)
+      if (std::is_trivially_default_constructible_v<T> == false)
         dealii::internal::AlignedVectorDefaultInitialize<T, true>(
           new_size - old_size, elements.get() + old_size);
     }
@@ -1345,7 +1375,7 @@ AlignedVector<T>::resize(const size_type new_size)
       // call destructor on fields that are released, if the type requires it.
       // doing it backward releases the elements in reverse order as compared to
       // how they were created
-      if (std::is_trivial_v<T> == false)
+      if (std::is_trivially_destructible_v<T> == false)
         for (T *p = used_elements_end - 1; p >= elements.get() + new_size; --p)
           p->~T();
       used_elements_end = elements.get() + new_size;
@@ -1380,7 +1410,7 @@ AlignedVector<T>::resize(const size_type new_size, const T &init)
       // call destructor on fields that are released, if the type requires it.
       // doing it backward releases the elements in reverse order as compared to
       // how they were created
-      if (std::is_trivial_v<T> == false)
+      if (std::is_trivially_destructible_v<T> == false)
         for (T *p = used_elements_end - 1; p >= elements.get() + new_size; --p)
           p->~T();
       used_elements_end = elements.get() + new_size;
@@ -1421,9 +1451,8 @@ AlignedVector<T>::allocate_and_move(const size_t old_size,
 
   // copy whatever elements we need to retain
   if (new_allocated_size > 0)
-    dealii::internal::AlignedVectorMoveConstruct<T>(elements.get(),
-                                                    elements.get() + old_size,
-                                                    new_data_ptr);
+    dealii::internal::AlignedVectorMoveConstruct<T *, T>(
+      elements.get(), elements.get() + old_size, new_data_ptr);
 
   // Now reset all the member variables of the current object
   // based on the allocation above. Assigning to a std::unique_ptr
@@ -1507,10 +1536,7 @@ AlignedVector<T>::push_back(const T in_data)
   Assert(used_elements_end <= allocated_elements_end, ExcInternalError());
   if (used_elements_end == allocated_elements_end)
     reserve(std::max(2 * capacity(), static_cast<size_type>(16)));
-  if (std::is_trivial_v<T> == false)
-    new (used_elements_end++) T(in_data);
-  else
-    *used_elements_end++ = in_data;
+  new (used_elements_end++) T(in_data);
 }
 
 
@@ -1545,11 +1571,54 @@ AlignedVector<T>::insert_back(ForwardIterator begin, ForwardIterator end)
   const size_type old_size = size();
   reserve(old_size + (end - begin));
   for (; begin != end; ++begin, ++used_elements_end)
+    new (used_elements_end) T(*begin);
+}
+
+
+
+template <class T>
+template <typename RandomAccessIterator, typename>
+inline typename AlignedVector<T>::iterator
+AlignedVector<T>::insert(const_iterator       position,
+                         RandomAccessIterator begin,
+                         RandomAccessIterator end)
+{
+  Assert(replicated_across_communicator == false,
+         ExcAlignedVectorChangeAfterReplication());
+  Assert(this->begin() <= position && position <= this->end(),
+         ExcMessage("The position iterator is not valid."));
+  const auto offset = position - this->begin();
+
+  const size_type old_size   = size();
+  const size_type range_size = end - begin;
+  const size_type new_size   = old_size + range_size;
+  if (range_size != 0)
     {
-      if (std::is_trivial_v<T> == false)
-        new (used_elements_end) T;
-      *used_elements_end = *begin;
+      // This is similar to allocate_and_move(), except that we need to move
+      // whatever was before position and whatever is after it into two
+      // different places
+      T *new_data_ptr = nullptr;
+      Utilities::System::posix_memalign(
+        reinterpret_cast<void **>(&new_data_ptr), 64, new_size * sizeof(T));
+
+      // Correctly handle the case where the range is inside the present array
+      // by creating a temporary.
+      AlignedVector<T> temporary(begin, end);
+      dealii::internal::AlignedVectorMoveConstruct<T *, T>(
+        elements.get(), elements.get() + offset, new_data_ptr);
+      dealii::internal::AlignedVectorMoveConstruct<T *, T>(
+        temporary.begin(), temporary.end(), new_data_ptr + offset);
+      dealii::internal::AlignedVectorMoveConstruct<T *, T>(
+        elements.get() + offset,
+        elements.get() + old_size,
+        new_data_ptr + offset + range_size);
+
+      Deleter deleter(this);
+      elements          = decltype(elements)(new_data_ptr, std::move(deleter));
+      used_elements_end = elements.get() + new_size;
+      allocated_elements_end = elements.get() + new_size;
     }
+  return this->begin() + offset;
 }
 
 
@@ -1707,11 +1776,11 @@ AlignedVector<T>::replicate_across_communicator(const MPI_Comm     communicator,
   // has all of the data.
   if (is_shmem_root)
     {
-      if (std::is_trivial_v<T>)
+      if (std::is_trivially_copyable_v<T> == true)
         {
-          // The data is "trivial", i.e., we can copy things directly without
-          // having to go through the serialization/deserialization machinery of
-          // Utilities::MPI::broadcast.
+          // The data is trivially copyable, i.e., we can copy things directly
+          // without having to go through the serialization/deserialization
+          // machinery of Utilities::MPI::broadcast.
           //
           // In that case, first tell all of the other shmem roots how many
           // elements we will have to deal with, and let them resize their
@@ -1900,7 +1969,7 @@ AlignedVector<T>::replicate_across_communicator(const MPI_Comm     communicator,
   // shared memory space.
   if (is_shmem_root)
     {
-      if (std::is_trivial_v<T> == true)
+      if (std::is_trivially_copyable_v<T> == true)
         std::memcpy(aligned_shmem_pointer, elements.get(), sizeof(T) * size());
       else
         for (std::size_t i = 0; i < size(); ++i)
@@ -1965,7 +2034,7 @@ AlignedVector<T>::replicate_across_communicator(const MPI_Comm     communicator,
 
 template <class T>
 inline void
-AlignedVector<T>::swap(AlignedVector<T> &vec)
+AlignedVector<T>::swap(AlignedVector<T> &vec) noexcept
 {
   // Swap the data in the 'elements' objects. Then also make sure that
   // their respective deleter objects point to the right place.

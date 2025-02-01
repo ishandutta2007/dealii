@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2003 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_template_constraints_h
 #define dealii_template_constraints_h
@@ -20,6 +19,7 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/complex_overloads.h>
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/std_cxx20/type_traits.h>
 
 #include <complex>
@@ -317,7 +317,7 @@ constexpr bool has_begin_and_end =
  * [std::identity_type](https://en.cppreference.com/w/cpp/types/type_identity)
  * class available under the name that deal.II has used for a long time.
  *
- * @deprecated Use `std_cxx20::identity_type` instead.
+ * @deprecated Use `std_cxx20::type_identity` instead.
  */
 template <typename T>
 using identity DEAL_II_DEPRECATED = std_cxx20::type_identity<T>;
@@ -668,9 +668,12 @@ namespace LinearAlgebra
 #  ifdef DEAL_II_TRILINOS_WITH_TPETRA
   namespace TpetraWrappers
   {
-    template <typename Number>
+    template <typename Number, typename MemorySpace>
     class Vector;
-  }
+
+    template <typename Number, typename MemorySpace>
+    class SparseMatrix;
+  } // namespace TpetraWrappers
 #  endif
 } // namespace LinearAlgebra
 #endif
@@ -781,9 +784,10 @@ namespace concepts
         true;
 
 #    ifdef DEAL_II_TRILINOS_WITH_TPETRA
-    template <typename Number>
+    template <typename Number, typename MemorySpace>
     inline constexpr bool is_dealii_vector_type<
-      dealii::LinearAlgebra::TpetraWrappers::Vector<Number>> = true;
+      dealii::LinearAlgebra::TpetraWrappers::Vector<Number, MemorySpace>> =
+      true;
 #    endif
 #  endif
 
@@ -1048,7 +1052,41 @@ namespace concepts
     {
       U.all_zero()
     } -> std::same_as<bool>;
+
+    {
+      U.get_mpi_communicator()
+    } -> std::same_as<MPI_Comm>;
   };
+
+
+  /**
+   * A concept that tests whether objects of type `MatrixType` can act
+   * as linear operators on `VectorType`. In practice, that means that
+   * `MatrixType` must have a `vmult()` member function that can take
+   * a `VectorType` object as input and produce another `VectorType`
+   * as output (both objects being taken as arguments to the `vmult()`
+   * function).
+   */
+  template <typename MatrixType, typename VectorType>
+  concept is_linear_operator_on =
+    requires(const MatrixType &A, VectorType &dst, const VectorType &src) {
+      A.vmult(dst, src);
+    };
+
+
+  /**
+   * A concept that tests whether objects of type `MatrixType` can act
+   * as the transposes of linear operators on `VectorType`. In practice, that
+   * means that `MatrixType` must have a `Tvmult()` member function that can
+   * take a `VectorType` object as input and produce another `VectorType`
+   * as output (both objects being taken as arguments to the `vmult()`
+   * function).
+   */
+  template <typename MatrixType, typename VectorType>
+  concept is_transpose_linear_operator_on =
+    requires(const MatrixType &A, VectorType &dst, const VectorType &src) {
+      A.Tvmult(dst, src);
+    };
 
 #endif
 

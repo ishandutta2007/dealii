@@ -1,17 +1,16 @@
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2023 by the deal.II authors
+// SPDX-License-Identifier: LGPL-2.1-or-later
+// Copyright (C) 2017 - 2024 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
-// The deal.II library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.md at
-// the top level directory of deal.II.
+// Part of the source code is dual licensed under Apache-2.0 WITH
+// LLVM-exception OR LGPL-2.1-or-later. Detailed license information
+// governing the source code and code contributions can be found in
+// LICENSE.md and CONTRIBUTING.md at the top level directory of deal.II.
 //
-// ---------------------------------------------------------------------
+// ------------------------------------------------------------------------
 
 #ifndef dealii_partitioner_templates_h
 #define dealii_partitioner_templates_h
@@ -709,7 +708,7 @@ namespace Utilities
                       locally_owned_array[j] =
                         internal::get_min(*read_position,
                                           locally_owned_array[j]);
-                      read_position++;
+                      ++read_position;
                     }
               else if (vector_operation == VectorOperation::max)
                 for (const auto &import_range : import_indices_data)
@@ -720,7 +719,7 @@ namespace Utilities
                       locally_owned_array[j] =
                         internal::get_max(*read_position,
                                           locally_owned_array[j]);
-                      read_position++;
+                      ++read_position;
                     }
               else
                 for (const auto &import_range : import_indices_data)
@@ -778,21 +777,14 @@ namespace Utilities
               Kokkos::deep_copy(
                 Kokkos::View<Number *, MemorySpace::Default::kokkos_space>(
                   ghost_array.data(), n_ghost_indices()),
-                0);
+                Number(0));
             }
           else
 #    endif
             {
-              if constexpr (std::is_trivial_v<Number>)
-                {
-                  std::memset(ghost_array.data(),
-                              0,
-                              sizeof(Number) * n_ghost_indices());
-                }
-              else
-                std::fill(ghost_array.data(),
-                          ghost_array.data() + n_ghost_indices(),
-                          0);
+              std::fill(ghost_array.data(),
+                        ghost_array.data() + n_ghost_indices(),
+                        Number(0));
             }
         }
 
