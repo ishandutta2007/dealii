@@ -277,6 +277,8 @@ namespace Portable
       unsigned int team_size;
     };
 
+
+
     /**
      * Structure which is passed to the kernel for a single DoFHandler. It is
      * used to pass all the necessary information from the CPU to the GPU and is
@@ -834,10 +836,47 @@ namespace Portable
      */
     unsigned int team_size;
 
+
+    /**
+     * Store data that is specific to the quadrature and mapping and common to
+     * all DoFHandlers.
+     */
+    struct MappingInfo
+    {
+      /**
+       * Vector of Kokkos::View to the quadrature points associated with the
+       * cells of each color.
+       */
+      std::vector<
+        Kokkos::View<point_type **, MemorySpace::Default::kokkos_space>>
+        q_points;
+
+      /**
+       * Vector of Kokkos::View of the inverse Jacobian associated with the
+       * cells of each color.
+       */
+      std::vector<
+        Kokkos::View<Number **[dim][dim], MemorySpace::Default::kokkos_space>>
+        inv_jacobian;
+
+      /**
+       * Vector of Kokkos::View to the Jacobian times the weights associated
+       * with the cells of each color.
+       */
+      std::vector<Kokkos::View<Number **, MemorySpace::Default::kokkos_space>>
+        JxW;
+    };
+
+    /**
+     * Store information for each quadrature formula / mapping. Currently always
+     * exactly size 1.
+     */
+    std::vector<MappingInfo> mapping_info;
+
     /**
      * Store data that is specific to each DoFHandler.
      */
-    struct PerDoFHandlerData
+    struct DoFInfo
     {
       /**
        * Total number of degrees of freedom.
@@ -942,7 +981,7 @@ namespace Portable
     /**
      * Store information necessary for each DoFHandler
      */
-    std::vector<PerDoFHandlerData> dof_handler_data;
+    std::vector<DoFInfo> dof_handler_data;
 
     /**
      * Number of quadrature points per cells.
@@ -958,28 +997,6 @@ namespace Portable
      * Number of cells in each color.
      */
     std::vector<unsigned int> n_cells;
-
-    /**
-     * Vector of Kokkos::View to the quadrature points associated to the cells
-     * of each color.
-     */
-    std::vector<Kokkos::View<point_type **, MemorySpace::Default::kokkos_space>>
-      q_points;
-
-    /**
-     * Vector of Kokkos::View of the inverse Jacobian associated to the cells
-     * of each color.
-     */
-    std::vector<
-      Kokkos::View<Number **[dim][dim], MemorySpace::Default::kokkos_space>>
-      inv_jacobian;
-
-    /**
-     * Vector of Kokkos::View to the Jacobian times the weights associated to
-     * the cells of each color.
-     */
-    std::vector<Kokkos::View<Number **, MemorySpace::Default::kokkos_space>>
-      JxW;
 
     /**
      * Length of the padding (closest power of two larger than or equal to

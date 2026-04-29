@@ -133,7 +133,7 @@ namespace Portable
     void
     ReinitHelper<dim, Number>::resize(const unsigned int n_colors)
     {
-      typename MatrixFree<dim, Number>::PerDoFHandlerData &dof_data =
+      typename MatrixFree<dim, Number>::DoFInfo &dof_data =
         data->dof_handler_data[dof_handler_index];
 
       dof_data.local_to_global.resize(n_colors);
@@ -153,8 +153,11 @@ namespace Portable
     {
       const unsigned int n_cells = data->n_cells[color];
 
-      typename MatrixFree<dim, Number>::PerDoFHandlerData &dof_data =
+      typename MatrixFree<dim, Number>::DoFInfo &dof_data =
         data->dof_handler_data[dof_handler_index];
+      typename MatrixFree<dim, Number>::MappingInfo &mapping_info =
+        data->mapping_info[0];
+
 
 
       // Create the Views
@@ -167,7 +170,7 @@ namespace Portable
           n_cells);
 
       if ((update_flags & update_quadrature_points) && dof_handler_index == 0)
-        data->q_points[color] =
+        mapping_info.q_points[color] =
           Kokkos::View<Point<dim, Number> **,
                        MemorySpace::Default::kokkos_space>(
             Kokkos::view_alloc("q_points_" + std::to_string(color),
@@ -176,7 +179,7 @@ namespace Portable
             n_cells);
 
       if ((update_flags & update_JxW_values) && dof_handler_index == 0)
-        data->JxW[color] =
+        mapping_info.JxW[color] =
           Kokkos::View<Number **, MemorySpace::Default::kokkos_space>(
             Kokkos::view_alloc("JxW_" + std::to_string(color),
                                Kokkos::WithoutInitializing),
@@ -184,7 +187,7 @@ namespace Portable
             n_cells);
 
       if ((update_flags & update_gradients) && dof_handler_index == 0)
-        data->inv_jacobian[color] =
+        mapping_info.inv_jacobian[color] =
           Kokkos::View<Number **[dim][dim], MemorySpace::Default::kokkos_space>(
             Kokkos::view_alloc("inv_jacobian_" + std::to_string(color),
                                Kokkos::WithoutInitializing),
@@ -202,35 +205,38 @@ namespace Portable
         Kokkos::create_mirror_view(dof_data.constraint_mask[color]);
 
       typename std::remove_reference_t<
-        decltype(data->q_points[color])>::host_mirror_type q_points_host;
+        decltype(mapping_info.q_points[color])>::host_mirror_type q_points_host;
       typename std::remove_reference_t<
-        decltype(data->JxW[color])>::host_mirror_type JxW_host;
-      typename std::remove_reference_t<decltype(data->inv_jacobian[color])>::
-        host_mirror_type inv_jacobian_host;
+        decltype(mapping_info.JxW[color])>::host_mirror_type JxW_host;
+      typename std::remove_reference_t<
+        decltype(mapping_info.inv_jacobian[color])>::host_mirror_type
+        inv_jacobian_host;
 #if DEAL_II_KOKKOS_VERSION_GTE(3, 6, 0)
       auto local_to_global_host =
         Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
                                    dof_data.local_to_global[color]);
       if (update_flags & update_quadrature_points && dof_handler_index == 0)
-        q_points_host = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
-                                                   data->q_points[color]);
+        q_points_host =
+          Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
+                                     mapping_info.q_points[color]);
       if ((update_flags & update_JxW_values) && dof_handler_index == 0)
         JxW_host = Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
-                                              data->JxW[color]);
+                                              mapping_info.JxW[color]);
       if ((update_flags & update_gradients) && dof_handler_index == 0)
         inv_jacobian_host =
           Kokkos::create_mirror_view(Kokkos::WithoutInitializing,
-                                     data->inv_jacobian[color]);
+                                     mapping_info.inv_jacobian[color]);
 #else
       auto local_to_global_host =
         Kokkos::create_mirror_view(dof_data.local_to_global[color]);
       if (update_flags & update_quadrature_points && dof_handler_index == 0)
-        q_points_host = Kokkos::create_mirror_view(data->q_points[color]);
+        q_points_host =
+          Kokkos::create_mirror_view(mapping_info.q_points[color]);
       if ((update_flags & update_JxW_values) && dof_handler_index == 0)
-        JxW_host = Kokkos::create_mirror_view(data->JxW[color]);
+        JxW_host = Kokkos::create_mirror_view(mapping_info.JxW[color]);
       if ((update_flags & update_gradients) && dof_handler_index == 0)
         inv_jacobian_host =
-          Kokkos::create_mirror_view(data->inv_jacobian[color]);
+          Kokkos::create_mirror_view(mapping_info.inv_jacobian[color]);
 #endif
       struct ScratchData
       {
@@ -347,12 +353,14 @@ namespace Portable
                         dof_data.local_to_global[color],
                         local_to_global_host);
       if ((update_flags & update_quadrature_points) && dof_handler_index == 0)
-        Kokkos::deep_copy(exec_space, data->q_points[color], q_points_host);
+        Kokkos::deep_copy(exec_space,
+                          mapping_info.q_points[color],
+                          q_points_host);
       if ((update_flags & update_JxW_values) && dof_handler_index == 0)
-        Kokkos::deep_copy(exec_space, data->JxW[color], JxW_host);
+        Kokkos::deep_copy(exec_space, mapping_info.JxW[color], JxW_host);
       if ((update_flags & update_gradients) && dof_handler_index == 0)
         Kokkos::deep_copy(exec_space,
-                          data->inv_jacobian[color],
+                          mapping_info.inv_jacobian[color],
                           inv_jacobian_host);
     }
 
@@ -653,15 +661,17 @@ namespace Portable
              "Current MPI process does not own any cells of the given color."));
 
     AssertIndexRange(dof_handler_index, dof_handler_data.size());
-    const PerDoFHandlerData &data = dof_handler_data[dof_handler_index];
+    const DoFInfo &data = dof_handler_data[dof_handler_index];
+
+    const unsigned int mapping_index = 0;
 
     PrecomputedData data_copy;
-    if (q_points.size() > 0)
-      data_copy.q_points = q_points[color];
-    if (inv_jacobian.size() > 0)
-      data_copy.inv_jacobian = inv_jacobian[color];
-    if (JxW.size() > 0)
-      data_copy.JxW = JxW[color];
+    if (mapping_info[mapping_index].q_points.size() > 0)
+      data_copy.q_points = mapping_info[mapping_index].q_points[color];
+    if (mapping_info[mapping_index].inv_jacobian.size() > 0)
+      data_copy.inv_jacobian = mapping_info[mapping_index].inv_jacobian[color];
+    if (mapping_info[mapping_index].JxW.size() > 0)
+      data_copy.JxW = mapping_info[mapping_index].JxW[color];
 
     data_copy.local_to_global    = data.local_to_global[color];
     data_copy.constraint_mask    = data.constraint_mask[color];
@@ -912,13 +922,17 @@ namespace Portable
                         MemoryConsumption::memory_consumption(graph) +
                         MemoryConsumption::memory_consumption(level_graph);
 
-    for (unsigned int color = 0; color < n_colors; ++color)
-      bytes +=
-        mem(q_points[color]) + mem(inv_jacobian[color]) + mem(JxW[color]);
+    for (const auto &mapping_info : mapping_info)
+      for (unsigned int color = 0; color < n_colors; ++color)
+        {
+          bytes += mem(mapping_info.q_points[color]) +
+                   mem(mapping_info.inv_jacobian[color]) +
+                   mem(mapping_info.JxW[color]);
+        }
 
-    for (const PerDoFHandlerData &pdhd : dof_handler_data)
+    for (const DoFInfo &pdhd : dof_handler_data)
       {
-        bytes += sizeof(PerDoFHandlerData) + mem(pdhd.shape_values) +
+        bytes += sizeof(DoFInfo) + mem(pdhd.shape_values) +
                  mem(pdhd.shape_gradients) + mem(pdhd.co_shape_gradients) +
                  mem(pdhd.constraint_weights) + mem(pdhd.constrained_dofs);
 
@@ -996,6 +1010,11 @@ namespace Portable
         "Please supply the same number of constraint objects and DoFHandler."));
     Assert(dof_handler_.size() > 0,
            ExcMessage("Please supply at least one DoFHandler."));
+
+    // For now, we only support exactly one quadrature rule / mapping:
+    mapping_info.clear();
+    mapping_info.emplace_back();
+
 
     UpdateFlags update_flags = additional_data.mapping_update_flags;
     if (update_flags & update_gradients)
@@ -1155,11 +1174,11 @@ namespace Portable
         }
 
       if (update_flags & update_quadrature_points)
-        q_points.resize(n_colors);
+        mapping_info[0].q_points.resize(n_colors);
       if (update_flags & update_JxW_values)
-        JxW.resize(n_colors);
+        mapping_info[0].JxW.resize(n_colors);
       if (update_flags & update_gradients)
-        inv_jacobian.resize(n_colors);
+        mapping_info[0].inv_jacobian.resize(n_colors);
     }
 
 
@@ -1184,8 +1203,8 @@ namespace Portable
 
     for (unsigned int c = 0; c < n_dof_handler; ++c)
       {
-        PerDoFHandlerData &data = dof_handler_data[c];
-        data.dof_handler        = dof_handler_[c];
+        DoFInfo &data    = dof_handler_data[c];
+        data.dof_handler = dof_handler_[c];
 
         data.n_dofs = (mg_level == numbers::invalid_unsigned_int) ?
                         data.dof_handler->n_dofs() :
